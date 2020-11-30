@@ -25,24 +25,13 @@ from tqdm import tqdm, trange
 
 from transformers import (
     AdamW,
-    AlbertConfig,
-    AlbertForQuestionAnswering,
-    AlbertTokenizer,
-    BertConfig,
-    BertForQuestionAnswering,
-    BertTokenizer,
-    DistilBertConfig,
-    DistilBertForQuestionAnswering,
-    DistilBertTokenizer,
-    RobertaConfig,
-    RobertaForQuestionAnswering,
-    RobertaTokenizer,
-    XLMConfig,
-    XLMForQuestionAnswering,
-    XLMTokenizer,
-    XLNetConfig,
-    XLNetForQuestionAnswering,
-    XLNetTokenizer,
+
+    ElectraConfig,
+    ElectraForQuestionAnswering,
+    # ElectraForSequenceClassification,
+    # ElctraForTokenClassification,
+    ElectraModel,
+    ElectraTokenizer,
     get_linear_schedule_with_warmup,
 )
 from open_squad import squad_convert_examples_to_features
@@ -73,18 +62,13 @@ logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 
-ALL_MODELS = sum(
-    (tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, RobertaConfig, XLNetConfig, XLMConfig)),
-    (),
-)
+# ALL_MODELS = sum(
+#     (tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, RobertaConfig, XLNetConfig, XLMConfig)),
+#     (),
+# )
 
 MODEL_CLASSES = {
-    "bert": (BertConfig, BertForQuestionAnswering, BertTokenizer),
-    "roberta": (RobertaConfig, RobertaForQuestionAnswering, RobertaTokenizer),
-    "xlnet": (XLNetConfig, XLNetForQuestionAnswering, XLNetTokenizer),
-    "xlm": (XLMConfig, XLMForQuestionAnswering, XLMTokenizer),
-    "distilbert": (DistilBertConfig, DistilBertForQuestionAnswering, DistilBertTokenizer),
-    "albert": (AlbertConfig, AlbertForQuestionAnswering, AlbertTokenizer),
+    "electra": (ElectraConfig, ElectraForQuestionAnswering, ElectraTokenizer)
 }
 
 
@@ -259,13 +243,13 @@ def train(args, train_dataset, model, tokenizer):
                 "end_positions": batch[4],
             }
 
-            if args.model_type in ["xlm", "roberta", "distilbert"]:
-                del inputs["token_type_ids"]
+            # if args.model_type in ["xlm", "roberta", "distilbert"]:
+            #     del inputs["token_type_ids"]
 
-            if args.model_type in ["xlnet", "xlm"]:
-                inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
-                if args.version_2_with_negative:
-                    inputs.update({"is_impossible": batch[7]})
+            # if args.model_type in ["xlnet", "xlm"]:
+            #     inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
+            #     if args.version_2_with_negative: #답이 없는 answer를 포함하는가?
+            #         inputs.update({"is_impossible": batch[7]})
             outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
@@ -580,7 +564,7 @@ def main():
         default=None,
         type=str,
         required=True,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
+        # help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
     )
     parser.add_argument(
         "--output_dir",

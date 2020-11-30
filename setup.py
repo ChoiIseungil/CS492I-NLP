@@ -1,4 +1,4 @@
-# nsml: nsml/ml:cuda10.1-cudnn7-pytorch1.3keras2.3
+#nsml: nvcr.io/nvidia/pytorch:20.03-py3
 
 from distutils.core import setup
 
@@ -8,6 +8,6 @@ setup(
     install_requires=[
         'boto3', 'regex', 'sacremoses', 'filelock', 'tokenizers',
         'tqdm', 'konlpy', 'sentencepiece', 'dataclasses',
-        'transformers==2.10.0'
+        'transformers==3.5.0'
     ]
 )

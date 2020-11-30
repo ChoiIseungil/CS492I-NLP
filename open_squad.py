@@ -140,9 +140,8 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
 
     span_doc_tokens = all_doc_tokens
     while len(spans) * doc_stride < len(all_doc_tokens):
-
         encoded_dict = tokenizer.encode_plus(
-            truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
+            truncated_query if tokenizer.padding_side == "right" else span_doc_tokens, #padding_side=="right"
             span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
             max_length=max_seq_length,
             return_overflowing_tokens=True,
