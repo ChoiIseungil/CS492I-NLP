@@ -129,27 +129,33 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
         )
 
     spans = []
-
+    
     truncated_query = tokenizer.encode(example.question_text, add_special_tokens=False, max_length=max_query_length)
+    # truncated_query = tokenizer.convert_ids_to_tokens(truncated_query)
     sequence_added_tokens = (
         tokenizer.max_len - tokenizer.max_len_single_sentence + 1
         if "roberta" in str(type(tokenizer))
         else tokenizer.max_len - tokenizer.max_len_single_sentence
     )
     sequence_pair_added_tokens = tokenizer.max_len - tokenizer.max_len_sentences_pair
-
+    
     span_doc_tokens = all_doc_tokens
+    convert_bool = False
     while len(spans) * doc_stride < len(all_doc_tokens):
-        encoded_dict = tokenizer.encode_plus(
-            truncated_query if tokenizer.padding_side == "right" else span_doc_tokens, #padding_side=="right"
+        if convert_bool:
+            span_doc_tokens = tokenizer.convert_ids_to_tokens(span_doc_tokens)
+        else:
+            truncated_query = tokenizer.convert_ids_to_tokens(truncated_query)
+        encoded_dict = tokenizer(
+            truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
             span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
+            padding='max_length',
+            truncation="only_second" if tokenizer.padding_side == "right" else "only_first",
             max_length=max_seq_length,
-            return_overflowing_tokens=True,
-            pad_to_max_length=True,
             stride=max_seq_length - doc_stride - len(truncated_query) - sequence_pair_added_tokens,
-            truncation_strategy="only_second" if tokenizer.padding_side == "right" else "only_first",
+            is_split_into_words=True,
+            return_overflowing_tokens=True,
         )
-
         paragraph_len = min(
             len(all_doc_tokens) - len(spans) * doc_stride,
             max_seq_length - len(truncated_query) - sequence_pair_added_tokens,
@@ -177,10 +183,10 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
 
         spans.append(encoded_dict)
 
-        if "overflowing_tokens" not in encoded_dict:
+        if encoded_dict["num_truncated_tokens"] <= 0:
             break
         span_doc_tokens = encoded_dict["overflowing_tokens"]
-
+        convert_bool = True
     for doc_span_index in range(len(spans)):
         for j in range(spans[doc_span_index]["paragraph_len"]):
             is_max_context = _new_check_is_max_context(spans, doc_span_index, doc_span_index * doc_stride + j)
@@ -194,7 +200,7 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
     for span in spans:
         # Identify the position of the CLS token
         cls_index = span["input_ids"].index(tokenizer.cls_token_id)
-
+        # print(span)
         # p_mask: mask with 1 for token than cannot be in the answer (0 for token which can be in an answer)
         # Original TF implem also keep the classification token (set to 0) (not sure why...)
         p_mask = np.array(span["token_type_ids"])
