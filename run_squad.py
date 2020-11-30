@@ -43,6 +43,9 @@ from transformers import (
     XLNetConfig,
     XLNetForQuestionAnswering,
     XLNetTokenizer,
+    ElectraConfig,
+    ElectraForQuestionAnswering,
+    ElectraTokenizer,
     get_linear_schedule_with_warmup,
 )
 from open_squad import squad_convert_examples_to_features
@@ -73,10 +76,10 @@ logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 
-ALL_MODELS = sum(
-    (tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, RobertaConfig, XLNetConfig, XLMConfig)),
-    (),
-)
+# ALL_MODELS = sum(
+#     (tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, RobertaConfig, XLNetConfig, XLMConfig)),
+#     (),
+# )
 
 MODEL_CLASSES = {
     "bert": (BertConfig, BertForQuestionAnswering, BertTokenizer),
@@ -85,6 +88,7 @@ MODEL_CLASSES = {
     "xlm": (XLMConfig, XLMForQuestionAnswering, XLMTokenizer),
     "distilbert": (DistilBertConfig, DistilBertForQuestionAnswering, DistilBertTokenizer),
     "albert": (AlbertConfig, AlbertForQuestionAnswering, AlbertTokenizer),
+    "electra": (ElectraConfig, ElectraForQuestionAnswering, ElectraTokenizer),
 }
 
 
@@ -152,7 +156,7 @@ def train(args, train_dataset, model, tokenizer):
 
     if args.max_steps > 0:
         t_total = args.max_steps
-        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
+        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 *args.n_gpu + 1
     else:
         t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
 
@@ -219,7 +223,7 @@ def train(args, train_dataset, model, tokenizer):
             # set global_step to global_step of last saved checkpoint from model path
             checkpoint_suffix = args.model_name_or_path.split("-")[-1].split("/")[0]
             global_step = int(checkpoint_suffix)
-            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
+            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 * args.n_gpu
             steps_trained_in_current_epoch = global_step % (len(train_dataloader) // args.gradient_accumulation_steps)
 
             logger.info("  Continuing training from checkpoint, will skip to saved global_step")
@@ -580,7 +584,7 @@ def main():
         default=None,
         type=str,
         required=True,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
+        help="Path to pre-trained model or shortcut name selected in the list: " + ", ", #.join(ALL_MODELS)
     )
     parser.add_argument(
         "--output_dir",
@@ -642,7 +646,7 @@ def main():
 
     parser.add_argument(
         "--max_seq_length",
-        default=384,
+        default=512, #384
         type=int,
         help="The maximum total input sequence length after WordPiece tokenization. Sequences "
              "longer than this will be truncated, and sequences shorter than this will be padded.",
