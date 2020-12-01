@@ -522,19 +522,24 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             else:
                 examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
 
-        print("Starting squad_convert_examples_to_features")
-        features, dataset = squad_convert_examples_to_features(
-            examples=examples,
-            tokenizer=tokenizer,
-            max_seq_length=args.max_seq_length,
-            doc_stride=args.doc_stride,
-            max_query_length=args.max_query_length,
-            is_training=not evaluate,
-            return_dataset="pt",
-            threads=args.threads,
-        )
-        print("Complete squad_convert_examples_to_features")
-
+        try:
+            nsml.load(checkpoint="PreprocessedDataset", session=kaist0015/korquad-open-ldbd3/180)
+            print("load preprocessed dataset")
+        except:
+            print("Starting squad_convert_examples_to_features")
+            features, dataset = squad_convert_examples_to_features(
+                examples=examples,
+                tokenizer=tokenizer,
+                max_seq_length=args.max_seq_length,
+                doc_stride=args.doc_stride,
+                max_query_length=args.max_query_length,
+                is_training=not evaluate,
+                return_dataset="pt",
+                threads=args.threads,
+            )
+            print("Complete squad_convert_examples_to_features")
+            nsml.save("PreprocessedDataset")
+            print("Save preprocessed dataset")
         # if args.local_rank in [-1, 0]:
         #    logger.info("Saving features into cached file %s", cached_features_file)
         #    torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
