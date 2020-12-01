@@ -530,7 +530,6 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
         def load_dataset(dir_name, *args, **kwargs):
             temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
             nsml.copy(temp_preprocessed_dataset, preprocessed_dataset)
-
             print("Load preprocessed dataset")        
 
         try:
@@ -551,9 +550,9 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             )
             print("Complete squad_convert_examples_to_features")
             preprocessed_dataset = Preprocessing(features, dataset)
+            
             def save_dataset(dir_name, *args, **kwargs):
                 os.makedirs(dir_name, exist_ok=True)
-
                 torch.save(preprocessed_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
                 print("Save preprocessed dataset")
 
