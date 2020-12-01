@@ -72,6 +72,10 @@ MODEL_CLASSES = {
     "electra": (ElectraConfig, ElectraForQuestionAnswering, ElectraTokenizer)
 }
 
+class Preprocessing():
+    def __init__(self, features, dataset):
+        self.features = features
+        self.dataset = dataset
 
 def set_seed(args):
     random.seed(args.seed)
@@ -522,9 +526,17 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             else:
                 examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
 
+        preprocessed_dataset = Preprocessing(None, None)
+        def load_dataset(dir_name, *args, **kwargs):
+            temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
+            nsml.copy(temp_preprocessed_dataset, preprocessed_dataset)
+
+            print("Load preprocessed dataset")        
+
         try:
-            nsml.load(checkpoint="PreprocessedDataset", session=kaist0015/korquad-open-ldbd3/180)
-            print("load preprocessed dataset")
+            nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/191')
+            featrues = preprocessed_dataset.features
+            dataset = preprocessed_dataset.dataset
         except:
             print("Starting squad_convert_examples_to_features")
             features, dataset = squad_convert_examples_to_features(
@@ -538,8 +550,15 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
                 threads=args.threads,
             )
             print("Complete squad_convert_examples_to_features")
-            nsml.save("PreprocessedDataset")
-            print("Save preprocessed dataset")
+            preprocessed_dataset = Preprocessing(features, dataset)
+            def save_dataset(dir_name, *args, **kwargs):
+                os.makedirs(dir_name, exist_ok=True)
+
+                torch.save(preprocessed_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
+                print("Save preprocessed dataset")
+
+            nsml.save("PreprocessedDataset", save_dataset)
+
         # if args.local_rank in [-1, 0]:
         #    logger.info("Saving features into cached file %s", cached_features_file)
         #    torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
@@ -556,7 +575,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
 
 def main():
     parser = argparse.ArgumentParser()
-
+    
     # Required parameters
     parser.add_argument(
         "--model_type",
