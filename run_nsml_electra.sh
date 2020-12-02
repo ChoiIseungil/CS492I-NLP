@@ -17,6 +17,6 @@ nsml run \
     --output_dir output
     --verbose_logging
     --overwrite_output_dir
-    --version_2_with_negative"\ 
-  --memory '40G'
-  --shm-size '3G'
+    --version_2_with_negative" \
+  --memory 40G \
+  --shm-size 3G
