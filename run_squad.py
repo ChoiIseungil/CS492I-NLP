@@ -382,14 +382,14 @@ def predict(args, model, tokenizer, prefix="", val_or_test="val"):
                 "token_type_ids": batch[2],
             }
 
-            if args.model_type in ["xlm", "roberta", "distilbert"]:
-                del inputs["token_type_ids"]
+            # if args.model_type in ["xlm", "roberta", "distilbert"]:
+            #     del inputs["token_type_ids"]
 
             example_indices = batch[3]
 
             # XLNet and XLM use more arguments for their predictions
-            if args.model_type in ["xlnet", "xlm"]:
-                inputs.update({"cls_index": batch[4], "p_mask": batch[5]})
+            # if args.model_type in ["xlnet", "xlm"]:
+            #     inputs.update({"cls_index": batch[4], "p_mask": batch[5]})
 
             outputs = model(**inputs)
 
@@ -534,7 +534,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
 
         try:
             nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/191')
-            featrues = preprocessed_dataset.features
+            features = preprocessed_dataset.features
             dataset = preprocessed_dataset.dataset
         except:
             print("Starting squad_convert_examples_to_features")
@@ -550,7 +550,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             )
             print("Complete squad_convert_examples_to_features")
             preprocessed_dataset = Preprocessing(features, dataset)
-            
+
             def save_dataset(dir_name, *args, **kwargs):
                 os.makedirs(dir_name, exist_ok=True)
                 torch.save(preprocessed_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
