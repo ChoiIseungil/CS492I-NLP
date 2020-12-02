@@ -140,22 +140,48 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
     sequence_pair_added_tokens = tokenizer.max_len - tokenizer.max_len_sentences_pair
     
     span_doc_tokens = all_doc_tokens
-    convert_bool = False
+    # convert_bool = False
     while len(spans) * doc_stride < len(all_doc_tokens):
+<<<<<<< HEAD
         if convert_bool:
             span_doc_tokens = tokenizer.convert_ids_to_tokens(span_doc_tokens)
         else:
             truncated_query = tokenizer.convert_ids_to_tokens(truncated_query)
         encoded_dict = tokenizer(
+=======
+        # print("query :", tokenizer.convert_ids_to_tokens(truncated_query))
+        # print("answer :", span_doc_tokens)
+        encoded_dict = tokenizer.encode_plus(
+>>>>>>> origin/donghwan
             truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
             span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
-            padding='max_length',
-            truncation="only_second" if tokenizer.padding_side == "right" else "only_first",
             max_length=max_seq_length,
-            stride=max_seq_length - doc_stride - len(truncated_query) - sequence_pair_added_tokens,
-            is_split_into_words=True,
             return_overflowing_tokens=True,
+            pad_to_max_length=True,
+            stride=max_seq_length - doc_stride - len(truncated_query) - sequence_pair_added_tokens,
+            truncation_strategy="only_second" if tokenizer.padding_side == "right" else "only_first",
+            truncation=True,
         )
+<<<<<<< HEAD
+=======
+        # if convert_bool:
+        #     span_doc_tokens = tokenizer.convert_ids_to_tokens(span_doc_tokens)
+        # else:
+        #     truncated_query = tokenizer.convert_ids_to_tokens(truncated_query)
+        # print("query :", truncated_query)
+        # print("answer :", span_doc_tokens)
+        # encoded_dict = tokenizer(
+        #     truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
+        #     span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
+        #     padding='max_length',
+        #     truncation="only_second" if tokenizer.padding_side == "right" else "only_first",
+        #     max_length=max_seq_length,
+        #     stride=max_seq_length - doc_stride - len(truncated_query) - sequence_pair_added_tokens,
+        #     is_split_into_words=True,
+        #     return_overflowing_tokens=True,
+        # )
+        # print(encoded_dict)
+>>>>>>> origin/donghwan
         paragraph_len = min(
             len(all_doc_tokens) - len(spans) * doc_stride,
             max_seq_length - len(truncated_query) - sequence_pair_added_tokens,
@@ -183,10 +209,12 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
 
         spans.append(encoded_dict)
 
-        if encoded_dict["num_truncated_tokens"] <= 0:
+        if "overflowing_tokens" not in encoded_dict or (
+            "overflowing_tokens" in encoded_dict and len(encoded_dict["overflowing_tokens"]) == 0
+         ):
             break
         span_doc_tokens = encoded_dict["overflowing_tokens"]
-        convert_bool = True
+        # convert_bool = True
     for doc_span_index in range(len(spans)):
         for j in range(spans[doc_span_index]["paragraph_len"]):
             is_max_context = _new_check_is_max_context(spans, doc_span_index, doc_span_index * doc_stride + j)
@@ -597,6 +625,14 @@ class SquadProcessor(DataProcessor):
                     continue
 
                 # todo: How to select training samples considering a memory limit.
+                text_list = question_text.split()
+                import gensim
+                model = gensim.models.Word2Vec.load('ko.bin')
+                for temp_test in text_list:
+                    try:
+                        print(model[temp_test])
+                    except:
+                        print(0)
                 per_qa_paragraph_cnt += 1
                 if is_training and per_qa_paragraph_cnt > 3:
                     break
