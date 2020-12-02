@@ -92,8 +92,9 @@ MODEL_CLASSES = {
 }
 
 class Preprocessing():
-    def __init__(self, features, dataset):
+    def __init__(self, features, examples, dataset):
         self.features = features
+        self.examples = examples
         self.dataset = dataset
 
 def set_seed(args):
@@ -364,10 +365,63 @@ def evaluate(args, model, tokenizer, prefix="", val_or_test="val"):
 
 
 def predict(args, model, tokenizer, prefix="", val_or_test="val"):
-    dataset, examples, features = load_and_cache_examples(
-        args, tokenizer, evaluate=True, output_examples=True,
-        val_or_test=val_or_test,
-    )
+    if val_or_test == "val":
+        validation_dataset = Preprocessing(None, None, None)
+        def load_dataset(dir_name, *args, **kwargs):
+            temp_validation_dataset = torch.load(os.path.join(dir_name, 'ValidationDataset'))
+            nsml.copy(temp_validation_dataset, validation_dataset)
+
+            print("Load validation dataset")        
+
+        try:
+            nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/197')
+            features = validation_dataset.features
+            examples = validation_dataset.examples
+            dataset = validation_dataset.dataset
+        except:
+            dataset, examples, features = load_and_cache_examples(
+                args, tokenizer, evaluate=True, output_examples=True,
+                val_or_test=val_or_test,
+            )
+            validation_dataset = Preprocessing(features, examples, dataset)
+            def save_dataset(dir_name, *args, **kwargs):
+                os.makedirs(dir_name, exist_ok=True)
+
+                torch.save(validation_dataset, os.path.join(dir_name, 'ValidationDataset'))
+                print("Save validation dataset")
+
+            nsml.save("ValidationDataset", save_dataset)
+    else:  
+        test_dataset = Preprocessing(None, None, None)
+        def load_dataset(dir_name, *args, **kwargs):
+            temp_test_dataset = torch.load(os.path.join(dir_name, 'TestDataset'))
+            nsml.copy(temp_test_dataset, test_dataset)
+
+            print("Load test dataset")        
+
+        try:
+            nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/197')
+            features = test_dataset.features
+            examples = test_dataset.examples
+            dataset = test_dataset.dataset
+        except:
+            dataset, examples, features = load_and_cache_examples(
+                args, tokenizer, evaluate=True, output_examples=True,
+                val_or_test=val_or_test,
+            )
+            test_dataset = Preprocessing(features, examples, dataset)
+            def save_dataset(dir_name, *args, **kwargs):
+                os.makedirs(dir_name, exist_ok=True)
+
+                torch.save(test_dataset, os.path.join(dir_name, 'TestDataset'))
+                print("Save test dataset")
+
+            nsml.save("TestDataset", save_dataset)
+    
+    # dataset, examples, features = load_and_cache_examples(
+    #     args, tokenizer, evaluate=True, output_examples=True,
+    #     val_or_test=val_or_test,
+    # )
 
     if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(args.output_dir)
@@ -545,7 +599,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             else:
                 examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
 
-        preprocessed_dataset = Preprocessing(None, None)
+        preprocessed_dataset = Preprocessing(None, examples, None)
         def load_dataset(dir_name, *args, **kwargs):
             temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
             nsml.copy(temp_preprocessed_dataset, preprocessed_dataset)
@@ -553,8 +607,8 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             print("Load preprocessed dataset")        
 
         try:
-            nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/191')
-            featrues = preprocessed_dataset.features
+            nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/197')
+            features = preprocessed_dataset.features
             dataset = preprocessed_dataset.dataset
         except:
             print("Starting squad_convert_examples_to_features")
@@ -569,7 +623,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
                 threads=args.threads,
             )
             print("Complete squad_convert_examples_to_features")
-            preprocessed_dataset = Preprocessing(features, dataset)
+            preprocessed_dataset = Preprocessing(features, examples, dataset)
             def save_dataset(dir_name, *args, **kwargs):
                 os.makedirs(dir_name, exist_ok=True)
 
