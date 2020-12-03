@@ -17,6 +17,7 @@ import sys
 from numpy import random # temp
 
 from transformers.tokenization_bert import BasicTokenizer
+# from transformers import ElectraTokenizer
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
@@ -323,7 +324,13 @@ def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
     # and `pred_text`, and check if they are the same length. If they are
     # NOT the same length, the heuristic has failed. If they are the same
     # length, we assume the characters are one-to-one aligned.
+
     tokenizer = BasicTokenizer(do_lower_case=do_lower_case)
+    # tokenizer = ElectraTokenizer.from_pretrained(
+    #     "monologg/koelectra-base-v2-finetuned-korquad",
+    #     do_lower_case=do_lower_case,
+    #     cache_dir= None,
+    # )
 
     tok_text = " ".join(tokenizer.tokenize(orig_text))
 

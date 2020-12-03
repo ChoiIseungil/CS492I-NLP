@@ -5,7 +5,7 @@ KorQuAD open 형 데이터 processor
 https://github.com/huggingface/transformers/blob/master/src/transformers/data/processors/squad.py
 
 """
-
+import gensim
 import json
 import logging
 import os
@@ -31,6 +31,14 @@ logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 
+model = gensim.models.Word2Vec.load('ko.bin')
+
+def soft_max(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0)
+
+def clear(str):
+    return str.replace(" ","").replace("#","")
 
 def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_answer_text):
     """Returns tokenized answer spans that better match the annotated answer."""
@@ -142,17 +150,7 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
     span_doc_tokens = all_doc_tokens
     # convert_bool = False
     while len(spans) * doc_stride < len(all_doc_tokens):
-<<<<<<< HEAD
-        if convert_bool:
-            span_doc_tokens = tokenizer.convert_ids_to_tokens(span_doc_tokens)
-        else:
-            truncated_query = tokenizer.convert_ids_to_tokens(truncated_query)
-        encoded_dict = tokenizer(
-=======
-        # print("query :", tokenizer.convert_ids_to_tokens(truncated_query))
-        # print("answer :", span_doc_tokens)
         encoded_dict = tokenizer.encode_plus(
->>>>>>> origin/donghwan
             truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
             span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
             max_length=max_seq_length,
@@ -162,8 +160,6 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
             truncation_strategy="only_second" if tokenizer.padding_side == "right" else "only_first",
             truncation=True,
         )
-<<<<<<< HEAD
-=======
         # if convert_bool:
         #     span_doc_tokens = tokenizer.convert_ids_to_tokens(span_doc_tokens)
         # else:
@@ -181,7 +177,6 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
         #     return_overflowing_tokens=True,
         # )
         # print(encoded_dict)
->>>>>>> origin/donghwan
         paragraph_len = min(
             len(all_doc_tokens) - len(spans) * doc_stride,
             max_seq_length - len(truncated_query) - sequence_pair_added_tokens,
@@ -575,10 +570,15 @@ class SquadProcessor(DataProcessor):
         examples = []
 
         has_answer_cnt, no_answer_cnt = 0, 0
+
         for entry in tqdm(input_data[:]):
             qa = entry['qa']
             question_text = qa["question"]
             answer_text = qa['answer']
+
+            question_pos_list = tokenizer.tokenize(question_text)
+            question_pos_list = list(map(clear, question_pos_list))
+
             if question_text is None or answer_text is None:
                 continue
 
@@ -587,6 +587,9 @@ class SquadProcessor(DataProcessor):
             for pi, paragraph in enumerate(entry["paragraphs"]):
                 title = paragraph["title"]
                 context_text = str(paragraph["contents"])
+                context_pos_list = tokenizer.tokenize(context_text)
+                context_pos_list = list(map(clear,context_pos_list))
+
                 if context_text is None:
                     continue
                 qas_id = "{}[SEP]{}[SEP]{}".format(question_text, answer_text, pi)
@@ -624,15 +627,29 @@ class SquadProcessor(DataProcessor):
                 if is_impossible and per_qa_unans_paragraph_cnt > 3:
                     continue
 
+                
                 # todo: How to select training samples considering a memory limit.
-                text_list = question_text.split()
-                import gensim
-                model = gensim.models.Word2Vec.load('ko.bin')
-                for temp_test in text_list:
-                    try:
-                        print(model[temp_test])
-                    except:
-                        print(0)
+                # text_list = question_text.split()
+                # from konlpy.tag import Okt
+                # from gensim.models.keyedvectors import KeyedVectors
+
+                # pos_vectors = KeyedVectors.load_word2vec_format('pos.vec', binary=False)
+                # okt = Okt()
+                
+                # qa_pos = okt.pos(question_text, norm=True)
+                # ans_pos = okt.pos(answer_text, norm=True)
+
+                total_distance = 0 
+
+                for question_pos in question_pos_list:
+                    def get_distance(x):
+                        try: return model.similarity(x,question_pos)                    
+                        except KeyError: return 0
+                    total_distance += max(list(map(get_distance,context_pos_list)))
+
+                total_distance/=len(question_pos_list)
+                # print(total_distance)
+
                 per_qa_paragraph_cnt += 1
                 if is_training and per_qa_paragraph_cnt > 3:
                     break

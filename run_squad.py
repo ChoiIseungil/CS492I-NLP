@@ -355,11 +355,7 @@ def predict(args, model, tokenizer, prefix="", val_or_test="val"):
             print("Load validation dataset")        
 
         try:
-<<<<<<< HEAD
-            nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/203')
-=======
-            nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/210')
->>>>>>> origin/donghwan
+            nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/262')
             features = validation_dataset.features
             examples = validation_dataset.examples
             dataset = validation_dataset.dataset
@@ -385,11 +381,7 @@ def predict(args, model, tokenizer, prefix="", val_or_test="val"):
             print("Load test dataset")        
 
         try:
-<<<<<<< HEAD
-            nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/197') #todo
-=======
-            nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/210')
->>>>>>> origin/donghwan
+            nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/262')
             features = test_dataset.features
             examples = test_dataset.examples
             dataset = test_dataset.dataset
@@ -588,55 +580,59 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             else:
                 examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
 
-        # preprocessed_dataset = Preprocessing(None, examples, None)
-        # def load_dataset(dir_name, *args, **kwargs):
-        #     temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
-        #     nsml.copy(temp_preprocessed_dataset, preprocessed_dataset)
+        preprocessed_dataset = Preprocessing(None, examples, None)
+        def load_dataset(dir_name, *args, **kwargs):
+            temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
+            nsml.copy(temp_preprocessed_dataset, preprocessed_dataset)
 
-        #     print("Load preprocessed dataset")        
+            print("Load preprocessed dataset")        
 
-        # try:
-        #     nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/210')
-        #     features = preprocessed_dataset.features
-        #     dataset = preprocessed_dataset.dataset
-        # except:
-        #     print("Starting squad_convert_examples_to_features")
-        #     features, dataset = squad_convert_examples_to_features(
-        #         examples=examples,
-        #         tokenizer=tokenizer,
-        #         max_seq_length=args.max_seq_length,
-        #         doc_stride=args.doc_stride,
-        #         max_query_length=args.max_query_length,
-        #         is_training=not evaluate,
-        #         return_dataset="pt",
-        #         threads=args.threads,
-        #     )
-        #     print("Complete squad_convert_examples_to_features")
-        #     preprocessed_dataset = Preprocessing(features, examples, dataset)
-        #     def save_dataset(dir_name, *args, **kwargs):
-        #         os.makedirs(dir_name, exist_ok=True)
+        try:
+            nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/262')
+            features = preprocessed_dataset.features
+            dataset = preprocessed_dataset.dataset
+        except:
+            print("Starting squad_convert_examples_to_features")
+            features, dataset = squad_convert_examples_to_features(
+                examples=examples,
+                tokenizer=tokenizer,
+                max_seq_length=args.max_seq_length,
+                doc_stride=args.doc_stride,
+                max_query_length=args.max_query_length,
+                is_training=not evaluate,
+                return_dataset="pt",
+                threads=args.threads,
+            )
+            print("Complete squad_convert_examples_to_features")
+            preprocessed_dataset = Preprocessing(features, examples, dataset)
 
-        print("Starting squad_convert_examples_to_features")
-        features, dataset = squad_convert_examples_to_features(
-            examples=examples,
-            tokenizer=tokenizer,
-            max_seq_length=args.max_seq_length,
-            doc_stride=args.doc_stride,
-            max_query_length=args.max_query_length,
-            is_training=not evaluate,
-            return_dataset="pt",
-            threads=args.threads,
-        )
-        print("Complete squad_convert_examples_to_features")
-        
-        #         torch.save(preprocessed_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
-        #         print("Save preprocessed dataset")
+            def save_dataset(dir_name, *args, **kwargs):
+                os.makedirs(dir_name, exist_ok=True)
+                torch.save(preprocessed_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
+                print("Save preprocessed dataset")
 
-        #     nsml.save("PreprocessedDataset", save_dataset)
+            nsml.save("PreprocessedDataset", save_dataset)
 
+        # print("Starting squad_convert_examples_to_features")
+        # features, dataset = squad_convert_examples_to_features(
+        #     examples=examples,
+        #     tokenizer=tokenizer,
+        #     max_seq_length=args.max_seq_length,
+        #     doc_stride=args.doc_stride,
+        #     max_query_length=args.max_query_length,
+        #     is_training=not evaluate,
+        #     return_dataset="pt",
+        #     threads=args.threads,
+        # )
+        # print("Complete squad_convert_examples_to_features")
+            
         # if args.local_rank in [-1, 0]:
         #    logger.info("Saving features into cached file %s", cached_features_file)
         #    torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
+
+        if args.local_rank in [-1, 0]:
+           logger.info("Saving features into cached file %s", cached_features_file)
+           torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
 
     if args.local_rank == 0 and not evaluate:
         # Make sure only the first process in distributed training process the dataset,
