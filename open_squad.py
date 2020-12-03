@@ -19,6 +19,7 @@ from tqdm import tqdm
 from transformers.file_utils import is_tf_available, is_torch_available
 from transformers.tokenization_bert import whitespace_tokenize
 from transformers.data.processors.utils import DataProcessor
+from transformers import ElectraTokenizer
 
 if is_torch_available():
     import torch
@@ -39,6 +40,12 @@ def soft_max(x):
 
 def clear(str):
     return str.replace(" ","").replace("#","")
+
+tokenizer_distance = ElectraTokenizer.from_pretrained(
+    "monologg/koelectra-base-v2-finetuned-korquad",
+    do_lower_case=None,
+    cache_dir=None,
+)
 
 def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_answer_text):
     """Returns tokenized answer spans that better match the annotated answer."""
@@ -137,19 +144,18 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
         )
 
     spans = []
-    
+
     truncated_query = tokenizer.encode(example.question_text, add_special_tokens=False, max_length=max_query_length)
-    # truncated_query = tokenizer.convert_ids_to_tokens(truncated_query)
     sequence_added_tokens = (
         tokenizer.max_len - tokenizer.max_len_single_sentence + 1
         if "roberta" in str(type(tokenizer))
         else tokenizer.max_len - tokenizer.max_len_single_sentence
     )
     sequence_pair_added_tokens = tokenizer.max_len - tokenizer.max_len_sentences_pair
-    
+
     span_doc_tokens = all_doc_tokens
-    # convert_bool = False
     while len(spans) * doc_stride < len(all_doc_tokens):
+
         encoded_dict = tokenizer.encode_plus(
             truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
             span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
@@ -158,25 +164,8 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
             pad_to_max_length=True,
             stride=max_seq_length - doc_stride - len(truncated_query) - sequence_pair_added_tokens,
             truncation_strategy="only_second" if tokenizer.padding_side == "right" else "only_first",
-            truncation=True,
         )
-        # if convert_bool:
-        #     span_doc_tokens = tokenizer.convert_ids_to_tokens(span_doc_tokens)
-        # else:
-        #     truncated_query = tokenizer.convert_ids_to_tokens(truncated_query)
-        # print("query :", truncated_query)
-        # print("answer :", span_doc_tokens)
-        # encoded_dict = tokenizer(
-        #     truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
-        #     span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
-        #     padding='max_length',
-        #     truncation="only_second" if tokenizer.padding_side == "right" else "only_first",
-        #     max_length=max_seq_length,
-        #     stride=max_seq_length - doc_stride - len(truncated_query) - sequence_pair_added_tokens,
-        #     is_split_into_words=True,
-        #     return_overflowing_tokens=True,
-        # )
-        # print(encoded_dict)
+
         paragraph_len = min(
             len(all_doc_tokens) - len(spans) * doc_stride,
             max_seq_length - len(truncated_query) - sequence_pair_added_tokens,
@@ -205,11 +194,11 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
         spans.append(encoded_dict)
 
         if "overflowing_tokens" not in encoded_dict or (
-            "overflowing_tokens" in encoded_dict and len(encoded_dict["overflowing_tokens"]) == 0
-         ):
+            "overflowing_tokens" in encoded_dict and len(encoded_dict["overflowing_tokens"])==0
+        ):
             break
         span_doc_tokens = encoded_dict["overflowing_tokens"]
-        # convert_bool = True
+
     for doc_span_index in range(len(spans)):
         for j in range(spans[doc_span_index]["paragraph_len"]):
             is_max_context = _new_check_is_max_context(spans, doc_span_index, doc_span_index * doc_stride + j)
@@ -223,7 +212,7 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
     for span in spans:
         # Identify the position of the CLS token
         cls_index = span["input_ids"].index(tokenizer.cls_token_id)
-        # print(span)
+
         # p_mask: mask with 1 for token than cannot be in the answer (0 for token which can be in an answer)
         # Original TF implem also keep the classification token (set to 0) (not sure why...)
         p_mask = np.array(span["token_type_ids"])
@@ -414,46 +403,46 @@ def squad_convert_examples_to_features(
             )
 
         return features, dataset
-    # elif return_dataset == "tf":
-    #     if not is_tf_available():
-    #         raise RuntimeError("TensorFlow must be installed to return a TensorFlow dataset.")
+    elif return_dataset == "tf":
+        if not is_tf_available():
+            raise RuntimeError("TensorFlow must be installed to return a TensorFlow dataset.")
 
-    #     def gen():
-    #         for ex in features:
-    #             yield (
-    #                 {
-    #                     "input_ids": ex.input_ids,
-    #                     "attention_mask": ex.attention_mask,
-    #                     "token_type_ids": ex.token_type_ids,
-    #                 },
-    #                 {
-    #                     "start_position": ex.start_position,
-    #                     "end_position": ex.end_position,
-    #                     "cls_index": ex.cls_index,
-    #                     "p_mask": ex.p_mask,
-    #                 },
-    #             )
+        def gen():
+            for ex in features:
+                yield (
+                    {
+                        "input_ids": ex.input_ids,
+                        "attention_mask": ex.attention_mask,
+                        "token_type_ids": ex.token_type_ids,
+                    },
+                    {
+                        "start_position": ex.start_position,
+                        "end_position": ex.end_position,
+                        "cls_index": ex.cls_index,
+                        "p_mask": ex.p_mask,
+                    },
+                )
 
-    #     return tf.data.Dataset.from_generator(
-    #         gen,
-    #         (
-    #             {"input_ids": tf.int32, "attention_mask": tf.int32, "token_type_ids": tf.int32},
-    #             {"start_position": tf.int64, "end_position": tf.int64, "cls_index": tf.int64, "p_mask": tf.int32},
-    #         ),
-    #         (
-    #             {
-    #                 "input_ids": tf.TensorShape([None]),
-    #                 "attention_mask": tf.TensorShape([None]),
-    #                 "token_type_ids": tf.TensorShape([None]),
-    #             },
-    #             {
-    #                 "start_position": tf.TensorShape([]),
-    #                 "end_position": tf.TensorShape([]),
-    #                 "cls_index": tf.TensorShape([]),
-    #                 "p_mask": tf.TensorShape([None]),
-    #             },
-    #         ),
-    #     )
+        return tf.data.Dataset.from_generator(
+            gen,
+            (
+                {"input_ids": tf.int32, "attention_mask": tf.int32, "token_type_ids": tf.int32},
+                {"start_position": tf.int64, "end_position": tf.int64, "cls_index": tf.int64, "p_mask": tf.int32},
+            ),
+            (
+                {
+                    "input_ids": tf.TensorShape([None]),
+                    "attention_mask": tf.TensorShape([None]),
+                    "token_type_ids": tf.TensorShape([None]),
+                },
+                {
+                    "start_position": tf.TensorShape([]),
+                    "end_position": tf.TensorShape([]),
+                    "cls_index": tf.TensorShape([]),
+                    "p_mask": tf.TensorShape([None]),
+                },
+            ),
+        )
 
     return features
 
@@ -567,27 +556,28 @@ class SquadProcessor(DataProcessor):
 
     def _create_examples(self, input_data, set_type):
         is_training = set_type == "train"
-        examples = []
+        temp_examples = []
+        examples=[]
+        distances = []
 
         has_answer_cnt, no_answer_cnt = 0, 0
-
         for entry in tqdm(input_data[:]):
             qa = entry['qa']
             question_text = qa["question"]
             answer_text = qa['answer']
 
-            question_pos_list = tokenizer.tokenize(question_text)
+            question_pos_list = tokenizer_distance.tokenize(question_text)
             question_pos_list = list(map(clear, question_pos_list))
 
             if question_text is None or answer_text is None:
                 continue
 
-            per_qa_paragraph_cnt = 0
+            # per_qa_paragraph_cnt = 0
             per_qa_unans_paragraph_cnt = 0
             for pi, paragraph in enumerate(entry["paragraphs"]):
                 title = paragraph["title"]
                 context_text = str(paragraph["contents"])
-                context_pos_list = tokenizer.tokenize(context_text)
+                context_pos_list = tokenizer_distance.tokenize(context_text)
                 context_pos_list = list(map(clear,context_pos_list))
 
                 if context_text is None:
@@ -627,17 +617,7 @@ class SquadProcessor(DataProcessor):
                 if is_impossible and per_qa_unans_paragraph_cnt > 3:
                     continue
 
-                
                 # todo: How to select training samples considering a memory limit.
-                # text_list = question_text.split()
-                # from konlpy.tag import Okt
-                # from gensim.models.keyedvectors import KeyedVectors
-
-                # pos_vectors = KeyedVectors.load_word2vec_format('pos.vec', binary=False)
-                # okt = Okt()
-                
-                # qa_pos = okt.pos(question_text, norm=True)
-                # ans_pos = okt.pos(answer_text, norm=True)
 
                 total_distance = 0 
 
@@ -645,16 +625,24 @@ class SquadProcessor(DataProcessor):
                     def get_distance(x):
                         try: return model.similarity(x,question_pos)                    
                         except KeyError: return 0
-                    total_distance += max(list(map(get_distance,context_pos_list)))
+                    temp_list = list(map(get_distance,context_pos_list))
+                    if len(temp_list) > 0:
+                        total_distance += max(temp_list)
+                    
+                if len(question_pos_list) > 0:
+                    total_distance/=len(question_pos_list)
+                else:
+                    total_distance=0
 
-                total_distance/=len(question_pos_list)
-                # print(total_distance)
+                # per_qa_paragraph_cnt += 1
+                # if is_training and per_qa_paragraph_cnt > 3:
+                #     break
+                distances.append(total_distance)
+                temp_examples.append(example)
 
-                per_qa_paragraph_cnt += 1
-                if is_training and per_qa_paragraph_cnt > 3:
-                    break
-
-                examples.append(example)
+        sorted_index = sorted(range(len(distances)), key=distances.__getitem__)
+        for i in range(3):
+            examples.append(temp_examples[sorted_index[-1 * (i+1)]])
 
         print("[{}] Has Answer({}) / No Answer({})".format(set_type, has_answer_cnt, no_answer_cnt))
         return examples
