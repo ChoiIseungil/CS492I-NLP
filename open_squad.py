@@ -5,6 +5,9 @@ KorQuAD open 형 데이터 processor
 https://github.com/huggingface/transformers/blob/master/src/transformers/data/processors/squad.py
 
 """
+from soynlp.normalizer import repeat_normalize
+import kss
+import re
 import gensim
 import json
 import logging
@@ -40,6 +43,10 @@ def soft_max(x):
 
 def clear(str):
     return str.replace(" ","").replace("#","")
+
+sub1 = re.compile('[^ .?!/@$%~|0-9|ㄱ-ㅣ가-힣]+')
+sub2 = re.compile('[\s]+')
+sub3 = re.compile('[\.]+')
 
 tokenizer_distance = ElectraTokenizer.from_pretrained(
     "monologg/koelectra-base-v2-finetuned-korquad",
@@ -470,10 +477,20 @@ class SquadProcessor(DataProcessor):
             answer = None
             answer_start = None
 
+            context_text = (tensor_dict["context"].numpy().decode("utf-8")).strip()
+            #todo: 일부 Brace로 감싸진 단어 제거
+            context_text = re.sub("[\{\[\【\<].*?[\}\]\】\>]", "", context_text)
+            #todo: preprocessing: 한글, 영어, 띄어쓰기, 일부 특수 문자 등을 제외하고 모두 제거
+            context_text = sub1.sub('', context_text) 
+            context_text = sub2.sub(' ', context_text)
+            context_text = sub3.sub('.', context_text)
+            #todo: 반복되는 글자 제거
+            context_text = repeat_normalize(context_text, num_repeats=2)
+            
         return SquadExample(
             qas_id=tensor_dict["id"].numpy().decode("utf-8"),
             question_text=tensor_dict["question"].numpy().decode("utf-8"),
-            context_text=tensor_dict["context"].numpy().decode("utf-8"),
+            context_text,
             answer_text=answer,
             start_position_character=answer_start,
             title=tensor_dict["title"].numpy().decode("utf-8"),
