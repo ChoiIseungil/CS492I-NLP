@@ -425,20 +425,6 @@ def select_best_predictions(all_nbest_json):
         text = nbest_json[0]["text"]
         prob = nbest_json[0]["probability"]
 
-    #     if qa_id_without_s not in best_answer_max_prob:
-    #         best_answer_max_prob[qa_id_without_s] = [prob]
-    #         best_answer_predictions[qa_id_without_s] = [text]
-    #     else:
-    #         best_answer_max_prob[qa_id_without_s].append(prob)
-    #         best_answer_predictions[qa_id_without_s].append(text)
-        
-    # for i in best_answer_max_prob:
-    #     sigma = sum(best_answer_max_prob[i])
-    #     roulette = []
-    #     for prob in best_answer_max_prob[i]:
-    #         roulette.append(prob/sigma)
-    #     best_answer_predictions[i] = random.choice(best_answer_predictions[i], p = roulette)
-
         if qa_id_without_s not in best_answer_max_prob:
             best_answer_max_prob[qa_id_without_s] = prob
             best_answer_predictions[qa_id_without_s] = text
