@@ -43,6 +43,9 @@ from transformers import (
     XLNetConfig,
     XLNetForQuestionAnswering,
     XLNetTokenizer,
+    ElectraConfig,
+    ElectraForQuestionAnswering,
+    ElectraTokenizer,
     get_linear_schedule_with_warmup,
 )
 from open_squad import squad_convert_examples_to_features
@@ -73,10 +76,10 @@ logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 
-ALL_MODELS = sum(
-    (tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, RobertaConfig, XLNetConfig, XLMConfig)),
-    (),
-)
+# ALL_MODELS = sum(
+#     (tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, RobertaConfig, XLNetConfig, XLMConfig)),
+#     (),
+# )
 
 MODEL_CLASSES = {
     "bert": (BertConfig, BertForQuestionAnswering, BertTokenizer),
@@ -85,8 +88,14 @@ MODEL_CLASSES = {
     "xlm": (XLMConfig, XLMForQuestionAnswering, XLMTokenizer),
     "distilbert": (DistilBertConfig, DistilBertForQuestionAnswering, DistilBertTokenizer),
     "albert": (AlbertConfig, AlbertForQuestionAnswering, AlbertTokenizer),
+    "electra": (ElectraConfig, ElectraForQuestionAnswering, ElectraTokenizer),
 }
 
+class Preprocessing():
+    def __init__(self, features, examples, dataset):
+        self.features = features
+        self.examples = examples
+        self.dataset = dataset
 
 def set_seed(args):
     random.seed(args.seed)
@@ -152,7 +161,7 @@ def train(args, train_dataset, model, tokenizer):
 
     if args.max_steps > 0:
         t_total = args.max_steps
-        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
+        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 *args.n_gpu + 1
     else:
         t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
 
@@ -219,7 +228,7 @@ def train(args, train_dataset, model, tokenizer):
             # set global_step to global_step of last saved checkpoint from model path
             checkpoint_suffix = args.model_name_or_path.split("-")[-1].split("/")[0]
             global_step = int(checkpoint_suffix)
-            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
+            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 * args.n_gpu
             steps_trained_in_current_epoch = global_step % (len(train_dataloader) // args.gradient_accumulation_steps)
 
             logger.info("  Continuing training from checkpoint, will skip to saved global_step")
@@ -550,6 +559,38 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
         )
         print("Complete squad_convert_examples_to_features")
 
+        # preprocessed_dataset = Preprocessing(None, examples, None)
+        # def load_dataset(dir_name, *args, **kwargs):
+        #     temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
+        #     nsml.copy(temp_preprocessed_dataset, preprocessed_dataset)
+
+        #     print("Load preprocessed dataset")        
+
+        # try:
+        #     nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/273')
+        #     features = preprocessed_dataset.features
+        #     dataset = preprocessed_dataset.dataset
+        # except:
+        #     print("Starting squad_convert_examples_to_features")
+        #     features, dataset = squad_convert_examples_to_features(
+        #         examples=examples,
+        #         tokenizer=tokenizer,
+        #         max_seq_length=args.max_seq_length,
+        #         doc_stride=args.doc_stride,
+        #         max_query_length=args.max_query_length,
+        #         is_training=not evaluate,
+        #         return_dataset="pt",
+        #         threads=args.threads,
+        #     )
+        #     print("Complete squad_convert_examples_to_features")
+        #     preprocessed_dataset = Preprocessing(features, examples, dataset)
+        #     def save_dataset(dir_name, *args, **kwargs):
+        #         os.makedirs(dir_name, exist_ok=True)
+        #         torch.save(preprocessed_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
+        #         print("Save preprocessed dataset")
+
+        #     nsml.save("PreprocessedDataset", save_dataset)
+
         # if args.local_rank in [-1, 0]:
         #    logger.info("Saving features into cached file %s", cached_features_file)
         #    torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
@@ -580,7 +621,7 @@ def main():
         default=None,
         type=str,
         required=True,
-        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
+        help="Path to pre-trained model or shortcut name selected in the list: " + ", ", # .join(ALL_MODELS)
     )
     parser.add_argument(
         "--output_dir",
