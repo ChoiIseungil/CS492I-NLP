@@ -25,24 +25,6 @@ from tqdm import tqdm, trange
 
 from transformers import (
     AdamW,
-    AlbertConfig,
-    AlbertForQuestionAnswering,
-    AlbertTokenizer,
-    BertConfig,
-    BertForQuestionAnswering,
-    BertTokenizer,
-    DistilBertConfig,
-    DistilBertForQuestionAnswering,
-    DistilBertTokenizer,
-    RobertaConfig,
-    RobertaForQuestionAnswering,
-    RobertaTokenizer,
-    XLMConfig,
-    XLMForQuestionAnswering,
-    XLMTokenizer,
-    XLNetConfig,
-    XLNetForQuestionAnswering,
-    XLNetTokenizer,
     ElectraConfig,
     ElectraForQuestionAnswering,
     ElectraTokenizer,
@@ -82,12 +64,6 @@ logger.addHandler(handler)
 # )
 
 MODEL_CLASSES = {
-    "bert": (BertConfig, BertForQuestionAnswering, BertTokenizer),
-    "roberta": (RobertaConfig, RobertaForQuestionAnswering, RobertaTokenizer),
-    "xlnet": (XLNetConfig, XLNetForQuestionAnswering, XLNetTokenizer),
-    "xlm": (XLMConfig, XLMForQuestionAnswering, XLMTokenizer),
-    "distilbert": (DistilBertConfig, DistilBertForQuestionAnswering, DistilBertTokenizer),
-    "albert": (AlbertConfig, AlbertForQuestionAnswering, AlbertTokenizer),
     "electra": (ElectraConfig, ElectraForQuestionAnswering, ElectraTokenizer),
 }
 
@@ -268,13 +244,6 @@ def train(args, train_dataset, model, tokenizer):
                 "end_positions": batch[4],
             }
 
-            if args.model_type in ["xlm", "roberta", "distilbert"]:
-                del inputs["token_type_ids"]
-
-            if args.model_type in ["xlnet", "xlm"]:
-                inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
-                if args.version_2_with_negative:
-                    inputs.update({"is_impossible": batch[7]})
             outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
@@ -365,59 +334,6 @@ def evaluate(args, model, tokenizer, prefix="", val_or_test="val"):
 
 
 def predict(args, model, tokenizer, prefix="", val_or_test="val"):
-    # if val_or_test == "val":
-    #     validation_dataset = Preprocessing(None, None, None)
-    #     def load_dataset(dir_name, *args, **kwargs):
-    #         temp_validation_dataset = torch.load(os.path.join(dir_name, 'ValidationDataset'))
-    #         nsml.copy(temp_validation_dataset, validation_dataset)
-
-    #         print("Load validation dataset")        
-
-    #     try:
-    #         nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/267')
-    #         features = validation_dataset.features
-    #         examples = validation_dataset.examples
-    #         dataset = validation_dataset.dataset
-    #     except:
-    #         dataset, examples, features = load_and_cache_examples(
-    #             args, tokenizer, evaluate=True, output_examples=True,
-    #             val_or_test=val_or_test,
-    #         )
-    #         validation_dataset = Preprocessing(features, examples, dataset)
-    #         def save_dataset(dir_name, *args, **kwargs):
-    #             os.makedirs(dir_name, exist_ok=True)
-
-    #             torch.save(validation_dataset, os.path.join(dir_name, 'ValidationDataset'))
-    #             print("Save validation dataset")
-
-    #         nsml.save("ValidationDataset", save_dataset)
-    # else:  
-    #     test_dataset = Preprocessing(None, None, None)
-    #     def load_dataset(dir_name, *args, **kwargs):
-    #         temp_test_dataset = torch.load(os.path.join(dir_name, 'TestDataset'))
-    #         nsml.copy(temp_test_dataset, test_dataset)
-
-    #         print("Load test dataset")        
-
-    #     try:
-    #         nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/267')
-    #         features = test_dataset.features
-    #         examples = test_dataset.examples
-    #         dataset = test_dataset.dataset
-    #     except:
-    #         dataset, examples, features = load_and_cache_examples(
-    #             args, tokenizer, evaluate=True, output_examples=True,
-    #             val_or_test=val_or_test,
-    #         )
-    #         test_dataset = Preprocessing(features, examples, dataset)
-    #         def save_dataset(dir_name, *args, **kwargs):
-    #             os.makedirs(dir_name, exist_ok=True)
-
-    #             torch.save(test_dataset, os.path.join(dir_name, 'TestDataset'))
-    #             print("Save test dataset")
-
-    #         nsml.save("TestDataset", save_dataset)
-
     dataset, examples, features = load_and_cache_examples(
         args, tokenizer, evaluate=True, output_examples=True,
         val_or_test=val_or_test,
@@ -455,14 +371,14 @@ def predict(args, model, tokenizer, prefix="", val_or_test="val"):
                 "token_type_ids": batch[2],
             }
 
-            if args.model_type in ["xlm", "roberta", "distilbert"]:
-                del inputs["token_type_ids"]
+            # if args.model_type in ["xlm", "roberta", "distilbert"]:
+            #     del inputs["token_type_ids"]
 
             example_indices = batch[3]
 
             # XLNet and XLM use more arguments for their predictions
-            if args.model_type in ["xlnet", "xlm"]:
-                inputs.update({"cls_index": batch[4], "p_mask": batch[5]})
+            # if args.model_type in ["xlnet", "xlm"]:
+            #     inputs.update({"cls_index": batch[4], "p_mask": batch[5]})
 
             outputs = model(**inputs)
 
@@ -509,45 +425,22 @@ def predict(args, model, tokenizer, prefix="", val_or_test="val"):
         output_null_log_odds_file = None
 
     is_test = (val_or_test == "test")
-    # XLNet and XLM use a more complex post-processing procedure
-    if args.model_type in ["xlnet", "xlm"]:
-        start_n_top = model.config.start_n_top if hasattr(model, "config") else model.module.config.start_n_top
-        end_n_top = model.config.end_n_top if hasattr(model, "config") else model.module.config.end_n_top
-
-        predictions = compute_predictions_log_probs(
-            examples,
-            features,
-            all_results,
-            args.n_best_size,
-            args.max_answer_length,
-            output_prediction_file,
-            output_nbest_file,
-            output_null_log_odds_file,
-            start_n_top,
-            end_n_top,
-            args.version_2_with_negative,
-            tokenizer,
-            args.verbose_logging,
-            is_test=is_test,
-        )
-    else:
-        predictions = compute_predictions_logits(
-            examples,
-            features,
-            all_results,
-            args.n_best_size,
-            args.max_answer_length,
-            args.do_lower_case,
-            output_prediction_file,
-            output_nbest_file,
-            output_null_log_odds_file,
-            args.verbose_logging,
-            args.version_2_with_negative,
-            args.null_score_diff_threshold,
-            tokenizer,
-            is_test=is_test,
-        )
-
+    predictions = compute_predictions_logits(
+        examples,
+        features,
+        all_results,
+        args.n_best_size,
+        args.max_answer_length,
+        args.do_lower_case,
+        output_prediction_file,
+        output_nbest_file,
+        output_null_log_odds_file,
+        args.verbose_logging,
+        args.version_2_with_negative,
+        args.null_score_diff_threshold,
+        tokenizer,
+        is_test=is_test,
+    )
     return examples, predictions
 
 
@@ -599,50 +492,102 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             else:
                 examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
 
-        print("Starting squad_convert_examples_to_features")
-        features, dataset = squad_convert_examples_to_features(
-            examples=examples,
-            tokenizer=tokenizer,
-            max_seq_length=args.max_seq_length,
-            doc_stride=args.doc_stride,
-            max_query_length=args.max_query_length,
-            is_training=not evaluate,
-            return_dataset="pt",
-            threads=args.threads,
-        )
-        print("Complete squad_convert_examples_to_features")
 
-        # preprocessed_dataset = Preprocessing(None, examples, None)
-        # def load_dataset(dir_name, *args, **kwargs):
-        #     temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
-        #     nsml.copy(temp_preprocessed_dataset, preprocessed_dataset)
+        loaded_dataset = Preprocessing(None, examples, None)
+        if evaluate:
+            if val_or_test == "val":
+                def load_dataset(dir_name, *args, **kwargs):
+                    temp_validation_dataset = torch.load(os.path.join(dir_name, 'ValidationDataset'))
+                    nsml.copy(temp_validation_dataset, loaded_dataset)
 
-        #     print("Load preprocessed dataset")        
+                    print("Load validation dataset")        
 
-        # try:
-        #     nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/270')
-        #     features = preprocessed_dataset.features
-        #     dataset = preprocessed_dataset.dataset
-        # except:
-        #     print("Starting squad_convert_examples_to_features")
-        #     features, dataset = squad_convert_examples_to_features(
-        #         examples=examples,
-        #         tokenizer=tokenizer,
-        #         max_seq_length=args.max_seq_length,
-        #         doc_stride=args.doc_stride,
-        #         max_query_length=args.max_query_length,
-        #         is_training=not evaluate,
-        #         return_dataset="pt",
-        #         threads=args.threads,
-        #     )
-        #     print("Complete squad_convert_examples_to_features")
-        #     preprocessed_dataset = Preprocessing(features, examples, dataset)
-        #     def save_dataset(dir_name, *args, **kwargs):
-        #         os.makedirs(dir_name, exist_ok=True)
-        #         torch.save(preprocessed_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
-        #         print("Save preprocessed dataset")
+                try:
+                    nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
+                    features = loaded_dataset.features
+                    dataset = loaded_dataset.dataset
+                except:
+                    print("Starting squad_convert_examples_to_features")
+                    features, dataset = squad_convert_examples_to_features(
+                        examples=examples,
+                        tokenizer=tokenizer,
+                        max_seq_length=args.max_seq_length,
+                        doc_stride=args.doc_stride,
+                        max_query_length=args.max_query_length,
+                        is_training=not evaluate,
+                        return_dataset="pt",
+                        threads=args.threads,
+                    )
+                    print("Complete squad_convert_examples_to_features")
+                    saved_dataset = Preprocessing(features, examples, dataset)
+                    def save_dataset(dir_name, *args, **kwargs):
+                        os.makedirs(dir_name, exist_ok=True)
+                        torch.save(saved_dataset, os.path.join(dir_name, 'ValidationDataset'))
+                        print("Save validation dataset")
 
-        #     nsml.save("PreprocessedDataset", save_dataset)
+                    nsml.save("ValidationDataset", save_dataset)
+            else:
+                def load_dataset(dir_name, *args, **kwargs):
+                    temp_test_dataset = torch.load(os.path.join(dir_name, 'TestDataset'))
+                    nsml.copy(temp_test_dataset, loaded_dataset)
+
+                    print("Load test dataset")        
+
+                try:
+                    nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
+                    features = loaded_dataset.features
+                    dataset = loaded_dataset.dataset
+                except:
+                    print("Starting squad_convert_examples_to_features")
+                    features, dataset = squad_convert_examples_to_features(
+                        examples=examples,
+                        tokenizer=tokenizer,
+                        max_seq_length=args.max_seq_length,
+                        doc_stride=args.doc_stride,
+                        max_query_length=args.max_query_length,
+                        is_training=not evaluate,
+                        return_dataset="pt",
+                        threads=args.threads,
+                    )
+                    print("Complete squad_convert_examples_to_features")
+                    saved_dataset = Preprocessing(features, examples, dataset)
+                    def save_dataset(dir_name, *args, **kwargs):
+                        os.makedirs(dir_name, exist_ok=True)
+                        torch.save(saved_dataset, os.path.join(dir_name, 'TestDataset'))
+                        print("Save test dataset")
+
+                    nsml.save("TestDataset", save_dataset)
+        else:
+            def load_dataset(dir_name, *args, **kwargs):
+                temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
+                nsml.copy(temp_preprocessed_dataset, loaded_dataset)
+
+                print("Load preprocessed dataset")        
+
+            try:
+                nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
+                features = loaded_dataset.features
+                dataset = loaded_dataset.dataset
+            except:
+                print("Starting squad_convert_examples_to_features")
+                features, dataset = squad_convert_examples_to_features(
+                    examples=examples,
+                    tokenizer=tokenizer,
+                    max_seq_length=args.max_seq_length,
+                    doc_stride=args.doc_stride,
+                    max_query_length=args.max_query_length,
+                    is_training=not evaluate,
+                    return_dataset="pt",
+                    threads=args.threads,
+                )
+                print("Complete squad_convert_examples_to_features")
+                saved_dataset = Preprocessing(features, examples, dataset)
+                def save_dataset(dir_name, *args, **kwargs):
+                    os.makedirs(dir_name, exist_ok=True)
+                    torch.save(saved_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
+                    print("Save preprocessed dataset")
+
+                nsml.save("PreprocessedDataset", save_dataset)
 
         # if args.local_rank in [-1, 0]:
         #    logger.info("Saving features into cached file %s", cached_features_file)
