@@ -601,10 +601,12 @@ class SquadProcessor(DataProcessor):
                     def get_distance(x):
                         try: return model.similarity(x,question_pos)                    
                         except KeyError: return 0
+                        
                     temp_list = np.array(list(map(get_distance,context_pos_list)))
-                    
+                    temp_list[temp_list!=0]
+
                 if len(temp_list) > 0:
-                    total_distance = temp_list[temp_list!=0].mean()
+                    total_distance = temp_list.mean()
                 else:
                     total_distance = 0
 
