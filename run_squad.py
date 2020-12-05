@@ -137,7 +137,7 @@ def train(args, train_dataset, model, tokenizer):
 
     if args.max_steps > 0:
         t_total = args.max_steps
-        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 *args.n_gpu + 1
+        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
     else:
         t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
 
@@ -204,7 +204,7 @@ def train(args, train_dataset, model, tokenizer):
             # set global_step to global_step of last saved checkpoint from model path
             checkpoint_suffix = args.model_name_or_path.split("-")[-1].split("/")[0]
             global_step = int(checkpoint_suffix)
-            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 * args.n_gpu
+            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
             steps_trained_in_current_epoch = global_step % (len(train_dataloader) // args.gradient_accumulation_steps)
 
             logger.info("  Continuing training from checkpoint, will skip to saved global_step")
@@ -244,9 +244,34 @@ def train(args, train_dataset, model, tokenizer):
                 "end_positions": batch[4],
             }
 
+            # model outputs are always tuple in transformers (see doc)
+            if args.model_type in ["xlm", "roberta", "distilbert"]:
+                del inputs["token_type_ids"]
+
+            if args.model_type in ["xlnet", "xlm"]:
+                inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
+                if args.version_2_with_negative:
+                    inputs.update({"is_impossible": batch[7]})
+
+            #todo: retrospective reader
             outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
-            loss = outputs[0]
+            verification_loss = torch.nn.MSELoss()
+            verification_start_logits = outputs[1]
+            verification_end_logits = outputs[2]
+            verification_start_logits = verification_start_logits.softmax(dim=1)
+            verification_end_logits = verification_end_logits.softmax(dim=1)
+            verification_start_logits = verification_start_logits.max(dim=1, keepdim=True)[0]
+            verification_end_logits = verification_end_logits.max(dim=1, keepdim=True)[0]
+            verification_logits = (verification_start_logits + verification_end_logits) / 2
+            start_positions = batch[3]
+            end_positions = batch[4]
+            mask_start = start_positions == 0
+            mask_end = end_positions == 0
+            answerability = torch.zeros(start_positions.size()).to(args.device)
+            answerability[~mask_start] = 1
+            answerability[~mask_end] = 1
+            loss = (outputs[0] + verification_loss(verification_logits, answerability))/2
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel (not distributed) training
@@ -445,6 +470,7 @@ def predict(args, model, tokenizer, prefix="", val_or_test="val"):
 
 
 def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False, val_or_test="val"):
+    SESSION_NO = args.session_no
     if args.local_rank not in [-1, 0] and not evaluate:
         # Make sure only the first process in distributed training process the dataset,
         # and the others will use the cache.
@@ -492,7 +518,6 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
             else:
                 examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
 
-
         loaded_dataset = Preprocessing(None, examples, None)
         if evaluate:
             if val_or_test == "val":
@@ -503,7 +528,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
                     print("Load validation dataset")        
 
                 try:
-                    nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
+                    nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/'+SESSION_NO)
                     features = loaded_dataset.features
                     dataset = loaded_dataset.dataset
                 except:
@@ -534,7 +559,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
                     print("Load test dataset")        
 
                 try:
-                    nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
+                    nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/'+SESSION_NO)
                     features = loaded_dataset.features
                     dataset = loaded_dataset.dataset
                 except:
@@ -565,7 +590,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
                 print("Load preprocessed dataset")        
 
             try:
-                nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
+                nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/'+SESSION_NO)
                 features = loaded_dataset.features
                 dataset = loaded_dataset.dataset
             except:
@@ -786,6 +811,7 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="Can be used for distant debugging.")
 
     parser.add_argument("--threads", type=int, default=1, help="multiple threads for converting example to features")
+    parser.add_argument("--session_no", type=int, default=1, help="number of session you want load datasets")
 
     ### DO NOT MODIFY THIS BLOCK ###
     # arguments for nsml

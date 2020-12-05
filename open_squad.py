@@ -6,7 +6,6 @@ https://github.com/huggingface/transformers/blob/master/src/transformers/data/pr
 
 """
 from soynlp.normalizer import repeat_normalize
-import kss
 import re
 import gensim
 import json
@@ -410,46 +409,6 @@ def squad_convert_examples_to_features(
             )
 
         return features, dataset
-    # elif return_dataset == "tf":
-    #     if not is_tf_available():
-    #         raise RuntimeError("TensorFlow must be installed to return a TensorFlow dataset.")
-
-    #     def gen():
-    #         for ex in features:
-    #             yield (
-    #                 {
-    #                     "input_ids": ex.input_ids,
-    #                     "attention_mask": ex.attention_mask,
-    #                     "token_type_ids": ex.token_type_ids,
-    #                 },
-    #                 {
-    #                     "start_position": ex.start_position,
-    #                     "end_position": ex.end_position,
-    #                     "cls_index": ex.cls_index,
-    #                     "p_mask": ex.p_mask,
-    #                 },
-    #             )
-
-    #     return tf.data.Dataset.from_generator(
-    #         gen,
-    #         (
-    #             {"input_ids": tf.int32, "attention_mask": tf.int32, "token_type_ids": tf.int32},
-    #             {"start_position": tf.int64, "end_position": tf.int64, "cls_index": tf.int64, "p_mask": tf.int32},
-    #         ),
-    #         (
-    #             {
-    #                 "input_ids": tf.TensorShape([None]),
-    #                 "attention_mask": tf.TensorShape([None]),
-    #                 "token_type_ids": tf.TensorShape([None]),
-    #             },
-    #             {
-    #                 "start_position": tf.TensorShape([]),
-    #                 "end_position": tf.TensorShape([]),
-    #                 "cls_index": tf.TensorShape([]),
-    #                 "p_mask": tf.TensorShape([None]),
-    #             },
-    #         ),
-    #     )
 
     return features
 
@@ -490,7 +449,7 @@ class SquadProcessor(DataProcessor):
         return SquadExample(
             qas_id=tensor_dict["id"].numpy().decode("utf-8"),
             question_text=tensor_dict["question"].numpy().decode("utf-8"),
-            context_text,
+            context_text=context_text,
             answer_text=answer,
             start_position_character=answer_start,
             title=tensor_dict["title"].numpy().decode("utf-8"),
@@ -573,7 +532,7 @@ class SquadProcessor(DataProcessor):
 
     def _create_examples(self, input_data, set_type):
         is_training = set_type == "train"
-        examples=[]
+        examples = []
 
         has_answer_cnt, no_answer_cnt = 0, 0
         for entry in tqdm(input_data[:]):
@@ -642,14 +601,12 @@ class SquadProcessor(DataProcessor):
                     def get_distance(x):
                         try: return model.similarity(x,question_pos)                    
                         except KeyError: return 0
-                    temp_list = list(map(get_distance,context_pos_list))
-                    if len(temp_list) > 0:
-                        total_distance += max(temp_list)
+                    temp_list = np.array(list(map(get_distance,context_pos_list)))
                     
-                if len(question_pos_list) > 0:
-                    total_distance/=len(question_pos_list)
+                if len(temp_list) > 0:
+                    total_distance = temp_list[temp_list!=0].mean()
                 else:
-                    total_distance=0
+                    total_distance = 0
 
                 # per_qa_paragraph_cnt += 1
                 # if is_training and per_qa_paragraph_cnt > 3:
@@ -659,12 +616,10 @@ class SquadProcessor(DataProcessor):
 
             sorted_index = sorted(range(len(distances)), key=distances.__getitem__)
             if is_training:
-                if 3<=len(temp_examples): #todo: hyperparameter: select number of paragraph to select
-                    for i in range(3):
-                        examples.append(temp_examples[sorted_index[-1 * (i+1)]])
-                else:
-                    examples = temp_examples
-            else: examples = temp_examples
+                number_to_select = min(len(temp_examples),3)
+                for i in range(number_to_select):
+                    examples.append(temp_examples[sorted_index[-1 * (i+1)]])
+            else: examples+=temp_examples
 
         print("[{}] Has Answer({}) / No Answer({})".format(set_type, has_answer_cnt, no_answer_cnt))
         return examples
