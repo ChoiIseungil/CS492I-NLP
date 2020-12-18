@@ -88,5 +88,8 @@ Compared to original threshold concept, our new concept focuses more on non-pret
 Also, by testing the models in pretrained option, we can get FixMatch works well in pretrained option but does not in non-pretrained option.
 
 # Reference
-D Berthelot, N Carlini, I Goodfellow, N Papernot, A Oliver, CA Raffel, MixMatch: A Holistic Approach to Semi-Supervised Learning, 2019 
-Kihyuk Sohn, David Berthelot, Chun-Liang Li, Zizhao Zhang, FixMatch: Simplifying Semi-Supervised Learning with Consistency and Confidence, 2020
+Jacob  Devlin,  Ming-Wei  Chang,  Kenton  Lee,  andKristina  Toutanova, BERT:  pre-training  ofdeep bidirectional transformers for language under-standing, CoRR, abs/1810.04805, 2018
+Kevin Clark, Minh-Thang Luong, Quoc V. Le, and Christopher D. Manning, ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators, 2020
+Zhuosheng Zhang, Junjie Yang, Hai Zhao. Retrospective Reader for Machine Reading Comprehension
+Matthew Denny and Arthur Spirling, Text pre-processing  for  unsupervised  learning:  Why  it  mat-ters, when it misleads, and what to do about it, 2017
+Alper Kursat Uysal and Serkan Gunal, The im-pact of preprocessing on text classification.Informa-tion Processing Management, 50(1):104 – 112, 2014.
