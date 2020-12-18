@@ -42,31 +42,19 @@ Our team's approaches are preprocessing, sampling strategy, and loss function wi
 
 ## Preprocessing
 
-Threshold is one of main concept of FixMatch.
+Korean SQuAD dataset we use is not that clear to be used for training. Therefore, we perform three steps of text preprocessing to refine the raw dataset. First, characters other than Korean, English, numbers, and a few allowed special characters are all erased. Second, we delete texts in brackets that seems unnecessary. Third, repeated characters are truncated.
 
-<img src="Image/preprocessing.jpeg" width="450px"></img><br/>
-> https://arxiv.org/pdf/2001.07685.pdf
-
-By using threshold while guessing pseudo label, the model only learn for confident unlabeled data.
-Original method use fixed threshold value, 0.95. Compared to original method, our team have to use non-pretrained model for this project.
-We suggest new concept threshold scheduling.
-
-<img src="Image/threshold_scheduling.png" width="450px"></img><br/>
-
-In the graph, X-axis is current_epoch/total_epoch and Y-axis is the probability that unused unlabeled data.
-For first epoch, the model learn the most confident 30% unlabeled data, and for last epoch, the model learn all of the unlabeled data. 
+<img src="image/preprocessing.jpeg" width="450px"></img><br/>
 
 ## Sampling Strategy
 
-FixMatch uses both weakly augmented data and strongly augmented data.
+We have to select train datasets among a lot of paragraphs. Not only the number of selected contexts but how to select the paragraphs is also important. We suppose that a context which is irrelevant to the question would hinder the training, so we take a strategy to select a context with high similarity with the question.
 
-<img src="Image/data_augmentation.png" width="450px"></img><br/>
-> https://arxiv.org/pdf/2001.07685.pdf
-
-For weak data augmentation, Crop, Horizontal Flip, and Vertical Flip
-For strong data augmentaion, Crop, Horizontal Flip, Vertical Flip, Rotation, Color Jitter, and Cutout
+<img src="image/sampling-strategy.jpeg" width="450px"></img><br/>
 
 ## Loss Function
+
+We suggest our own loss function which is the sum of span prediction loss and verification loss. By doing so, the model is trained by where the answer is and whether the question is answerable or not.
 
 # Result
 
