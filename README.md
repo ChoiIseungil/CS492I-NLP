@@ -11,9 +11,7 @@ Authorized [SeungilLee](https://github.com/ChoiIseungil)
 
 -----------
 
-The final model output
-
-[Google Drive link](https://drive.google.com/file/d/1k8KLB3umUVo7ink178cfITobQ2F5wRzB/view?usp=sharing)
+[The final model output](https://drive.google.com/file/d/1k8KLB3umUVo7ink178cfITobQ2F5wRzB/view?usp=sharing)
 
 # Table of contents
 
