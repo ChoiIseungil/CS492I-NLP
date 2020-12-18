@@ -58,9 +58,11 @@ We suggest our own loss function which is the sum of span prediction loss and ve
 
 # Result
 
-To check how important the components of our approach are, we perform ablation study to preprocessing, sampling strategy, and loss function. The most important component is preprocessing. Sampling strategy improve validation f1-score, but lower test f1-score. With our final model, more batch size and more training stepsresult in better score.
+To check how important the components of our approach are, we perform ablation study to preprocessing, sampling strategy, and loss function. By the table, the most important component is preprocessing. Sampling strategy improve validation f1-score, but lower test f1-score. With our final model, more batch size and more training stepsresult in better score.
 
 <img src="image/ablation.png" width="300px"></img><br/>
+
+
 
 # Conclusion
 
