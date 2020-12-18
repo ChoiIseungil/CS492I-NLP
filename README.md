@@ -1,43 +1,102 @@
-# korquad-open-cs492I
-KorQuad-Open Baseline Code for KAIST CS492I 2020 Fall
+# CS492(I) NLP Project
+
+KAIST CS492(I) Special Topics in Computer Science[Deep Learning for Real-World Problems]
 
 ## Original Author
 Seonhoon Kim (Naver)
 
-## Train in NSML
-```bash
-sh run_nsml.sh
-```
+Authorized [DonghwanKim](https://github.com/DonghwanKIM0101)
 
-## Train in Local
+Authorized [SeungilLee](https://github.com/ChoiIseungil)
 
-```bash
-sh run_local.sh
-```
+-----------
 
-## How to Improve?
+The final model output
 
-### Improve how to select the best answer among different contexts.
+[Google Drive link](https://drive.google.com/file/d/1k8KLB3umUVo7ink178cfITobQ2F5wRzB/view?usp=sharing)
 
-We deal with a QA task with a single question and multiple contexts (i.e., paragraphs). One of the most important issues in this type of task is in which paragraph to pick the answer span. Current naive implementation is comparing the probability in a prediction and choosing the paragraph with the largest. Implement a strategy to pick the best answer.
+# Table of contents
 
-See the codes:
-- https://github.com/dongkwan-kim/korquad-open-cs492i/blob/master/open_squad_metrics.py#L412
-- https://github.com/dongkwan-kim/korquad-open-cs492i/blob/master/open_squad_metrics.py#L639
-- https://github.com/dongkwan-kim/korquad-open-cs492i/blob/master/run_squad.py#L358
+1. [Summary](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#summary)
+2. [Method](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#method)
 
-**NOTE: In the baseline, you can find the huge gap between validation and test performances (f1-score), since the f1-score for the validation is measured per paragraph, and the f1-score for the test is measured per question.**
+    2.1 [Threshold](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#threshold)
 
-![val_f1](https://raw.githubusercontent.com/dongkwan-kim/korquad-open-cs492i/master/static/val_f1.png)
-![test_f1](https://raw.githubusercontent.com/dongkwan-kim/korquad-open-cs492i/master/static/test_f1.png)
+    2.2 [Data Augmentation](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#data-augmentation)
 
-### Improve how to select training samples considering a memory limit.
+3. [Result](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#result)
+4. [Conclusion](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#conclusion)
+5. [Reference](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#reference)
 
-There are multiple contexts, but since there is a memory limit, we cannot include everything in training. The baseline is using first three samples in sequence. Which training samples should we choose to learn the best representation? 
+# Summary
 
-See the codes:
-- https://github.com/dongkwan-kim/korquad-open-cs492i/blob/master/open_squad.py#L594
+It is project in KAIST CS492(I) course. With NSML of NAVER, implement shopping item object detection model. 
 
-### Change model and hyper-parameter configurations.
+![Alt text](Image/0a5e810ae2cbbf0bdbce393ed8209498.jpg)
+![Alt text](Image/0a70b8806168e481d63f8331bbdf00f8.jpg)
 
-Do as much as you want.
+These are the example of data.
+Our team's approach is to exploit [FixMatch](https://arxiv.org/pdf/2001.07685.pdf) to [MixMatch](https://arxiv.org/pdf/1905.02249.pdf).
+
+# Method
+
+## Threshold
+
+Threshold is one of main concept of FixMatch.
+
+<img src="Image/threshold.png" width="450px"></img><br/>
+> https://arxiv.org/pdf/2001.07685.pdf
+
+By using threshold while guessing pseudo label, the model only learn for confident unlabeled data.
+Original method use fixed threshold value, 0.95. Compared to original method, our team have to use non-pretrained model for this project.
+We suggest new concept threshold scheduling.
+
+<img src="Image/threshold_scheduling.png" width="450px"></img><br/>
+
+In the graph, X-axis is current_epoch/total_epoch and Y-axis is the probability that unused unlabeled data.
+For first epoch, the model learn the most confident 30% unlabeled data, and for last epoch, the model learn all of the unlabeled data. 
+
+## Data Augmentation
+
+FixMatch uses both weakly augmented data and strongly augmented data.
+
+<img src="Image/data_augmentation.png" width="450px"></img><br/>
+> https://arxiv.org/pdf/2001.07685.pdf
+
+For weak data augmentation, Crop, Horizontal Flip, and Vertical Flip
+For strong data augmentaion, Crop, Horizontal Flip, Vertical Flip, Rotation, Color Jitter, and Cutout
+
+# Result
+
+To check our own model, compare MixMatch, ThresholdMixMatch, FixMixMatch.
+ThresholdMixMatch is MixMatch with threshold scheduling,
+FixMixMatch is MixMatch with threshold scheduling, weak and strong data augmentation.
+We use DenseNet121 for all tests.
+
+<img src="Image/avg_top1_np.png" width="300px"></img><br/>
+<img src="Image/avg_top5_np.png" width="300px"></img><br/>
+
+For non-pretrained model, ThresholdMixMatch shows the best result and FixMixMatch shows the worst result.
+
+<img src="Image/avg_top1_p.png" width="300px"></img><br/>
+<img src="Image/avg_top5_p.png" width="300px"></img><br/>
+
+For pretrained model, three models show similar result although FixMixMatch shows the worst result in average top1.
+
+# Conclusion
+
+We wanted to exploit FixMatch to MixMatch; FixMixMatch.
+From the result, FixMixMatch does not show good result for non-pretrained model.
+We guessed that it is because the strong data augmentation does not work well in non-pretrained model.
+
+<img src="Image/conclusion.png" width="300px"></img><br/>
+
+The graph proves our guess.
+
+However, threshold scheduling improves the result.
+Compared to original threshold concept, our new concept focuses more on non-pretrained model.
+Also, by testing the models in pretrained option, we can get FixMatch works well in pretrained option but does not in non-pretrained option.
+
+# Reference
+D Berthelot, N Carlini, I Goodfellow, N Papernot, A Oliver, CA Raffel, MixMatch: A Holistic Approach to Semi-Supervised Learning, 2019 
+Kihyuk Sohn, David Berthelot, Chun-Liang Li, Zizhao Zhang, FixMatch: Simplifying Semi-Supervised Learning with Consistency and Confidence, 2020
