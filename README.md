@@ -17,30 +17,30 @@ The final model output
 
 # Table of contents
 
-1. [Summary](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#summary)
-2. [Method](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#method)
+1. [Summary](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#summary)
+2. [Method](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#method)
 
-    2.1 [Threshold](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#threshold)
+    2.1 [Preprocessing](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#preprocessing)
 
-    2.2 [Data Augmentation](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#data-augmentation)
+    2.2 [Sampling Strategy](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#sampling-strategy)
+    
+    2.3 [Loss Function](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#loss-function)
 
-3. [Result](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#result)
-4. [Conclusion](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#conclusion)
-5. [Reference](https://github.com/DonghwanKIM0101/CS492I_CV/blob/main/README.md#reference)
+3. [Result](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#result)
+4. [Conclusion](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#conclusion)
+5. [Reference](https://github.com/ChoiIseungil/CS492I_NLP/blob/master/README.md#reference)
 
 # Summary
 
-It is project in KAIST CS492(I) course. With NSML of NAVER, implement shopping item object detection model. 
+It is project in KAIST CS492(I) course. With NSML of NAVER, implement Korean SQuAD v2.0 model.
 
-![Alt text](Image/0a5e810ae2cbbf0bdbce393ed8209498.jpg)
-![Alt text](Image/0a70b8806168e481d63f8331bbdf00f8.jpg)
+SQuAD is one of the important NLP processes that predict answers from question and passage pairs, and SQuAD v2.0 covers answerable questions and unanswerable ones.
 
-These are the example of data.
-Our team's approach is to exploit [FixMatch](https://arxiv.org/pdf/2001.07685.pdf) to [MixMatch](https://arxiv.org/pdf/1905.02249.pdf).
+Our team's approaches are preprocessing, sampling strategy, and loss function with verification loss. 
 
 # Method
 
-## Threshold
+## Preprocessing
 
 Threshold is one of main concept of FixMatch.
 
@@ -56,7 +56,7 @@ We suggest new concept threshold scheduling.
 In the graph, X-axis is current_epoch/total_epoch and Y-axis is the probability that unused unlabeled data.
 For first epoch, the model learn the most confident 30% unlabeled data, and for last epoch, the model learn all of the unlabeled data. 
 
-## Data Augmentation
+## Sampling Strategy
 
 FixMatch uses both weakly augmented data and strongly augmented data.
 
@@ -65,6 +65,8 @@ FixMatch uses both weakly augmented data and strongly augmented data.
 
 For weak data augmentation, Crop, Horizontal Flip, and Vertical Flip
 For strong data augmentaion, Crop, Horizontal Flip, Vertical Flip, Rotation, Color Jitter, and Cutout
+
+## Loss Function
 
 # Result
 
