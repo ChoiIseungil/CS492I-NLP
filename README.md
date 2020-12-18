@@ -67,17 +67,9 @@ Following graphs are f1-score and loss of final model.
 
 # Conclusion
 
-We wanted to exploit FixMatch to MixMatch; FixMixMatch.
-From the result, FixMixMatch does not show good result for non-pretrained model.
-We guessed that it is because the strong data augmentation does not work well in non-pretrained model.
+For korquad dataset, we use ELECTRA and fusedLAMB, make preprocessing steps, sample train dataset, and loss function that consists of span prediction loss and verification loss.
 
-<img src="Image/conclusion.png" width="300px"></img><br/>
-
-The graph proves our guess.
-
-However, threshold scheduling improves the result.
-Compared to original threshold concept, our new concept focuses more on non-pretrained model.
-Also, by testing the models in pretrained option, we can get FixMatch works well in pretrained option but does not in non-pretrained option.
+In further study, we expect to exploit the properties of Korean language such as agglutinative language and flexible word order.
 
 # Reference
 Jacob  Devlin,  Ming-Wei  Chang,  Kenton  Lee,  andKristina  Toutanova, BERT:  pre-training  ofdeep bidirectional transformers for language under-standing, CoRR, abs/1810.04805, 2018
