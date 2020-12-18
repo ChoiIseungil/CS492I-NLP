@@ -64,7 +64,7 @@ To check how important the components of our approach are, we perform ablation s
 
 Following graphs are f1-score and loss of final model.
 
-<img src="image/f1.png" width="300px"></img><br/>
+<img src="image/f1score.png" width="300px"></img><br/>
 <img src="image/loss.png" width="300px"></img><br/>
 
 # Conclusion
