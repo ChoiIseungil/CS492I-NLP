@@ -5,6 +5,8 @@ KorQuAD open 형 데이터 processor
 https://github.com/huggingface/transformers/blob/master/src/transformers/data/processors/squad.py
 
 """
+from soynlp.normalizer import repeat_normalize
+import re
 import gensim
 import json
 import logging
@@ -40,6 +42,10 @@ def soft_max(x):
 
 def clear(str):
     return str.replace(" ","").replace("#","")
+
+sub1 = re.compile('[^ .?!/@$%~|0-9|\x41-\x7A|ㄱ-ㅣ가-힣]+')
+sub2 = re.compile('[\s]+')
+sub3 = re.compile('[\.]+')
 
 tokenizer_distance = ElectraTokenizer.from_pretrained(
     "monologg/koelectra-base-v2-finetuned-korquad",
@@ -403,46 +409,6 @@ def squad_convert_examples_to_features(
             )
 
         return features, dataset
-    # elif return_dataset == "tf":
-    #     if not is_tf_available():
-    #         raise RuntimeError("TensorFlow must be installed to return a TensorFlow dataset.")
-
-    #     def gen():
-    #         for ex in features:
-    #             yield (
-    #                 {
-    #                     "input_ids": ex.input_ids,
-    #                     "attention_mask": ex.attention_mask,
-    #                     "token_type_ids": ex.token_type_ids,
-    #                 },
-    #                 {
-    #                     "start_position": ex.start_position,
-    #                     "end_position": ex.end_position,
-    #                     "cls_index": ex.cls_index,
-    #                     "p_mask": ex.p_mask,
-    #                 },
-    #             )
-
-    #     return tf.data.Dataset.from_generator(
-    #         gen,
-    #         (
-    #             {"input_ids": tf.int32, "attention_mask": tf.int32, "token_type_ids": tf.int32},
-    #             {"start_position": tf.int64, "end_position": tf.int64, "cls_index": tf.int64, "p_mask": tf.int32},
-    #         ),
-    #         (
-    #             {
-    #                 "input_ids": tf.TensorShape([None]),
-    #                 "attention_mask": tf.TensorShape([None]),
-    #                 "token_type_ids": tf.TensorShape([None]),
-    #             },
-    #             {
-    #                 "start_position": tf.TensorShape([]),
-    #                 "end_position": tf.TensorShape([]),
-    #                 "cls_index": tf.TensorShape([]),
-    #                 "p_mask": tf.TensorShape([None]),
-    #             },
-    #         ),
-    #     )
 
     return features
 
@@ -556,7 +522,7 @@ class SquadProcessor(DataProcessor):
 
     def _create_examples(self, input_data, set_type):
         is_training = set_type == "train"
-        examples=[]
+        examples = []
 
         has_answer_cnt, no_answer_cnt = 0, 0
         for entry in tqdm(input_data[:]):
@@ -572,7 +538,7 @@ class SquadProcessor(DataProcessor):
             if question_text is None or answer_text is None:
                 continue
 
-            # per_qa_paragraph_cnt = 0
+            per_qa_paragraph_cnt = 0
             per_qa_unans_paragraph_cnt = 0
             for pi, paragraph in enumerate(entry["paragraphs"]):
                 title = paragraph["title"]
@@ -586,18 +552,29 @@ class SquadProcessor(DataProcessor):
                 start_position_character = None
                 answers = []
 
+                # preprocessing
+                if is_training:
+                    # #todo: 일부 Brace로 감싸진 단어 제거
+                    context_text = re.sub("[\{\[\【\<].*?[\}\]\】\>]", "", context_text)
+                    # #todo: preprocessing: 한글, 영어, 띄어쓰기, 일부 특수 문자 등을 제외하고 모두 제거
+                    context_text = sub1.sub('', context_text) 
+                    context_text = sub2.sub(' ', context_text)
+                    context_text = sub3.sub('.', context_text)
+                    # #todo: 반복되는 글자 제거
+                    context_text = repeat_normalize(context_text, num_repeats=2)
+
                 if answer_text not in context_text:
                     is_impossible = True
                 else:
                     is_impossible = False
-
+                
                 if not is_impossible:
                     if is_training:
                         start_position_character = context_text.index(answer_text)  # answer["answer_start"]
                     else:
                         answers = [{"text": answer_text,
                                     "answer_start": context_text.index(answer_text)}]
-
+                
                 example = SquadExample(
                     qas_id=qas_id,
                     question_text=question_text,
@@ -619,35 +596,45 @@ class SquadProcessor(DataProcessor):
 
                 # todo: How to select training samples considering a memory limit.
 
-                total_distance = 0 
-
-                for question_pos in question_pos_list:
-                    def get_distance(x):
-                        try: return model.similarity(x,question_pos)                    
-                        except KeyError: return 0
-                    temp_list = list(map(get_distance,context_pos_list))
-                    if len(temp_list) > 0:
-                        total_distance += max(temp_list)
-                    
-                if len(question_pos_list) > 0:
-                    total_distance/=len(question_pos_list)
+            # # vanilla
+            #     per_qa_paragraph_cnt += 1
+            #     if is_training and per_qa_paragraph_cnt > 3:
+            #         break
+                
+            #     examples.append(example)
+            # # vanilla
+            # sampling strategy
+                if is_impossible:
+                    examples.append(example)
                 else:
-                    total_distance=0
 
-                # per_qa_paragraph_cnt += 1
-                # if is_training and per_qa_paragraph_cnt > 3:
-                #     break
-                distances.append(total_distance)
-                temp_examples.append(example)
+                # if not is_impossible:
+                
+                    total_distance = 0 
+
+                    for question_pos in question_pos_list:
+                        def get_distance(x):
+                            try: return model.similarity(x,question_pos)                    
+                            except KeyError: return 0
+                            
+                        temp_list = np.array(list(map(get_distance,context_pos_list)))
+                        temp_list[temp_list!=0]
+
+                    if len(temp_list) > 0:
+                        total_distance = temp_list.mean()
+                    else:
+                        total_distance = 0
+
+                    distances.append(total_distance)
+                    temp_examples.append(example)
 
             sorted_index = sorted(range(len(distances)), key=distances.__getitem__)
             if is_training:
-                if 3<=len(temp_examples): #todo: hyperparameter: select number of paragraph to select
-                    for i in range(3):
-                        examples.append(temp_examples[sorted_index[-1 * (i+1)]])
-                else:
-                    examples = temp_examples
-            else: examples = temp_examples
+                number_to_select = min(len(temp_examples),10)
+                for i in range(number_to_select):
+                    examples.append(temp_examples[sorted_index[-1 * (i+1)]])
+            else: examples+=temp_examples
+            # sampling strategy
 
         print("[{}] Has Answer({}) / No Answer({})".format(set_type, has_answer_cnt, no_answer_cnt))
         return examples

@@ -9,7 +9,7 @@ KorQuAD open 형 학습 스크립트
 https://github.com/huggingface/transformers/blob/master/examples/question-answering/run_squad.py
 
 """
-
+import apex
 import argparse
 import logging
 import os
@@ -67,11 +67,9 @@ MODEL_CLASSES = {
     "electra": (ElectraConfig, ElectraForQuestionAnswering, ElectraTokenizer),
 }
 
-class Preprocessing():
-    def __init__(self, features, examples, dataset):
-        self.features = features
+class Save_load_dataset():
+    def __init__(self, examples):
         self.examples = examples
-        self.dataset = dataset
 
 def set_seed(args):
     random.seed(args.seed)
@@ -137,7 +135,7 @@ def train(args, train_dataset, model, tokenizer):
 
     if args.max_steps > 0:
         t_total = args.max_steps
-        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 *args.n_gpu + 1
+        args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
     else:
         t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
 
@@ -150,7 +148,8 @@ def train(args, train_dataset, model, tokenizer):
         },
         {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    # optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    optimizer  = apex.optimizers.FusedLAMB(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
@@ -204,7 +203,7 @@ def train(args, train_dataset, model, tokenizer):
             # set global_step to global_step of last saved checkpoint from model path
             checkpoint_suffix = args.model_name_or_path.split("-")[-1].split("/")[0]
             global_step = int(checkpoint_suffix)
-            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps) * args.per_gpu_train_batch_size / 24 * args.n_gpu
+            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
             steps_trained_in_current_epoch = global_step % (len(train_dataloader) // args.gradient_accumulation_steps)
 
             logger.info("  Continuing training from checkpoint, will skip to saved global_step")
@@ -244,9 +243,41 @@ def train(args, train_dataset, model, tokenizer):
                 "end_positions": batch[4],
             }
 
+            # model outputs are always tuple in transformers (see doc)
+            if args.model_type in ["xlm", "roberta", "distilbert"]:
+                del inputs["token_type_ids"]
+
+            if args.model_type in ["xlnet", "xlm"]:
+                inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
+                if args.version_2_with_negative:
+                    inputs.update({"is_impossible": batch[7]})
+
+            #todo: retrospective reader
             outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
-            loss = outputs[0]
+
+            # our loss function
+            loss_fct = torch.nn.MSELoss()
+            verification_start_logits = outputs[1]
+            verification_end_logits = outputs[2]
+            verification_start_logits = verification_start_logits.softmax(dim=1)
+            verification_end_logits = verification_end_logits.softmax(dim=1)
+            verification_start_logits = verification_start_logits.max(dim=1, keepdim=True)[0]
+            verification_end_logits = verification_end_logits.max(dim=1, keepdim=True)[0]
+            verification_logits = (verification_start_logits + verification_end_logits) / 2
+            start_positions = batch[3]
+            end_positions = batch[4]
+            mask_start = start_positions == 0
+            mask_end = end_positions == 0
+            answerability = torch.zeros(start_positions.size()).to(args.device)
+            answerability[~mask_start] = 1
+            answerability[~mask_end] = 1
+            verification_loss = loss_fct(verification_logits, answerability)
+            loss = 0.8 * outputs[0] + 0.2 * verification_loss
+            # our loss function
+
+            # # vanilla
+            # loss = outputs[0]
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel (not distributed) training
@@ -445,6 +476,8 @@ def predict(args, model, tokenizer, prefix="", val_or_test="val"):
 
 
 def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=False, val_or_test="val"):
+    SESSION_NO = str(args.session_no).strip()
+    print("Try to load data set from session:",SESSION_NO)
     if args.local_rank not in [-1, 0] and not evaluate:
         # Make sure only the first process in distributed training process the dataset,
         # and the others will use the cache.
@@ -473,121 +506,77 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
     else:
         logger.info("Creating features from dataset file at %s", input_dir)
 
-        if not args.data_dir and ((evaluate and not args.predict_file) or (not evaluate and not args.train_file)):
-            try:
-                import tensorflow_datasets as tfds
-            except ImportError:
-                raise ImportError("If not data_dir is specified, tensorflow_datasets needs to be installed.")
-
-            if args.version_2_with_negative:
-                logger.warn("tensorflow_datasets does not handle version 2 of SQuAD.")
-
-            tfds_examples = tfds.load("squad")
-            examples = SquadV1Processor().get_examples_from_dataset(tfds_examples, evaluate=evaluate)
-        else:
-            processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
-            if evaluate:
-                filename = args.predict_file if val_or_test == "val" else "test_data/korquad_open_test.json"
-                examples = processor.get_eval_examples(args.data_dir, filename=filename)
-            else:
-                examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
-
-
-        loaded_dataset = Preprocessing(None, examples, None)
+        loaded_dataset = Save_load_dataset(None)
+        processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
         if evaluate:
             if val_or_test == "val":
                 def load_dataset(dir_name, *args, **kwargs):
                     temp_validation_dataset = torch.load(os.path.join(dir_name, 'ValidationDataset'))
                     nsml.copy(temp_validation_dataset, loaded_dataset)
-
-                    print("Load validation dataset")        
-
+                    print("Load validation dataset")
                 try:
-                    nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
-                    features = loaded_dataset.features
-                    dataset = loaded_dataset.dataset
+                    nsml.load("ValidationDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/'+SESSION_NO)
+                    examples = loaded_dataset.examples
                 except:
-                    print("Starting squad_convert_examples_to_features")
-                    features, dataset = squad_convert_examples_to_features(
-                        examples=examples,
-                        tokenizer=tokenizer,
-                        max_seq_length=args.max_seq_length,
-                        doc_stride=args.doc_stride,
-                        max_query_length=args.max_query_length,
-                        is_training=not evaluate,
-                        return_dataset="pt",
-                        threads=args.threads,
-                    )
-                    print("Complete squad_convert_examples_to_features")
-                    saved_dataset = Preprocessing(features, examples, dataset)
+                    filename = args.predict_file 
+                    examples = processor.get_eval_examples(args.data_dir, filename=filename)
+                    saved_dataset = Save_load_dataset(examples)
                     def save_dataset(dir_name, *args, **kwargs):
                         os.makedirs(dir_name, exist_ok=True)
                         torch.save(saved_dataset, os.path.join(dir_name, 'ValidationDataset'))
                         print("Save validation dataset")
-
                     nsml.save("ValidationDataset", save_dataset)
             else:
-                def load_dataset(dir_name, *args, **kwargs):
-                    temp_test_dataset = torch.load(os.path.join(dir_name, 'TestDataset'))
-                    nsml.copy(temp_test_dataset, loaded_dataset)
-
-                    print("Load test dataset")        
-
-                try:
-                    nsml.load("TestDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
-                    features = loaded_dataset.features
-                    dataset = loaded_dataset.dataset
-                except:
-                    print("Starting squad_convert_examples_to_features")
-                    features, dataset = squad_convert_examples_to_features(
-                        examples=examples,
-                        tokenizer=tokenizer,
-                        max_seq_length=args.max_seq_length,
-                        doc_stride=args.doc_stride,
-                        max_query_length=args.max_query_length,
-                        is_training=not evaluate,
-                        return_dataset="pt",
-                        threads=args.threads,
-                    )
-                    print("Complete squad_convert_examples_to_features")
-                    saved_dataset = Preprocessing(features, examples, dataset)
-                    def save_dataset(dir_name, *args, **kwargs):
-                        os.makedirs(dir_name, exist_ok=True)
-                        torch.save(saved_dataset, os.path.join(dir_name, 'TestDataset'))
-                        print("Save test dataset")
-
-                    nsml.save("TestDataset", save_dataset)
+                filename = "test_data/korquad_open_test.json"
+                examples = processor.get_eval_examples(args.data_dir, filename=filename)
         else:
             def load_dataset(dir_name, *args, **kwargs):
                 temp_preprocessed_dataset = torch.load(os.path.join(dir_name, 'PreprocessedDataset'))
                 nsml.copy(temp_preprocessed_dataset, loaded_dataset)
-
-                print("Load preprocessed dataset")        
-
+                print("Load preprocessed dataset")
             try:
-                nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/286')
-                features = loaded_dataset.features
-                dataset = loaded_dataset.dataset
+                nsml.load("PreprocessedDataset", load_dataset, 'kaist0015/korquad-open-ldbd3/'+SESSION_NO)
+                examples = loaded_dataset.examples
             except:
-                print("Starting squad_convert_examples_to_features")
-                features, dataset = squad_convert_examples_to_features(
-                    examples=examples,
-                    tokenizer=tokenizer,
-                    max_seq_length=args.max_seq_length,
-                    doc_stride=args.doc_stride,
-                    max_query_length=args.max_query_length,
-                    is_training=not evaluate,
-                    return_dataset="pt",
-                    threads=args.threads,
-                )
-                print("Complete squad_convert_examples_to_features")
-                saved_dataset = Preprocessing(features, examples, dataset)
+                examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
+                saved_dataset = Save_load_dataset(examples)
                 def save_dataset(dir_name, *args, **kwargs):
                     os.makedirs(dir_name, exist_ok=True)
                     torch.save(saved_dataset, os.path.join(dir_name, 'PreprocessedDataset'))
                     print("Save preprocessed dataset")
-
                 nsml.save("PreprocessedDataset", save_dataset)
+
+        # if not args.data_dir and ((evaluate and not args.predict_file) or (not evaluate and not args.train_file)):
+        #     try:
+        #         import tensorflow_datasets as tfds
+        #     except ImportError:
+        #         raise ImportError("If not data_dir is specified, tensorflow_datasets needs to be installed.")
+
+        #     if args.version_2_with_negative:
+        #         logger.warn("tensorflow_datasets does not handle version 2 of SQuAD.")
+
+        #     tfds_examples = tfds.load("squad")
+        #     examples = SquadV1Processor().get_examples_from_dataset(tfds_examples, evaluate=evaluate)
+        # else:
+        #     processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
+        #     if evaluate:
+        #         filename = args.predict_file if val_or_test == "val" else "test_data/korquad_open_test.json"
+        #         examples = processor.get_eval_examples(args.data_dir, filename=filename)
+        #     else:
+        #         examples = processor.get_train_examples(args.data_dir, filename=args.train_file)
+
+        print("Starting squad_convert_examples_to_features")
+        features, dataset = squad_convert_examples_to_features(
+            examples=examples,
+            tokenizer=tokenizer,
+            max_seq_length=args.max_seq_length,
+            doc_stride=args.doc_stride,
+            max_query_length=args.max_query_length,
+            is_training=not evaluate,
+            return_dataset="pt",
+            threads=args.threads,
+        )
+        print("Complete squad_convert_examples_to_features")
 
         # if args.local_rank in [-1, 0]:
         #    logger.info("Saving features into cached file %s", cached_features_file)
@@ -786,6 +775,7 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="Can be used for distant debugging.")
 
     parser.add_argument("--threads", type=int, default=1, help="multiple threads for converting example to features")
+    parser.add_argument("--session_no", type=int, default=1, help="number of session you want load datasets")
 
     ### DO NOT MODIFY THIS BLOCK ###
     # arguments for nsml
