@@ -58,20 +58,9 @@ We suggest our own loss function which is the sum of span prediction loss and ve
 
 # Result
 
-To check our own model, compare MixMatch, ThresholdMixMatch, FixMixMatch.
-ThresholdMixMatch is MixMatch with threshold scheduling,
-FixMixMatch is MixMatch with threshold scheduling, weak and strong data augmentation.
-We use DenseNet121 for all tests.
+To check how important the components of our approach are, we perform ablation study to preprocessing, sampling strategy, and loss function. The most important component is preprocessing. Sampling strategy improve validation f1-score, but lower test f1-score. With our final model, more batch size and more training stepsresult in better score.
 
-<img src="Image/avg_top1_np.png" width="300px"></img><br/>
-<img src="Image/avg_top5_np.png" width="300px"></img><br/>
-
-For non-pretrained model, ThresholdMixMatch shows the best result and FixMixMatch shows the worst result.
-
-<img src="Image/avg_top1_p.png" width="300px"></img><br/>
-<img src="Image/avg_top5_p.png" width="300px"></img><br/>
-
-For pretrained model, three models show similar result although FixMixMatch shows the worst result in average top1.
+<img src="image/ablation.png" width="300px"></img><br/>
 
 # Conclusion
 
