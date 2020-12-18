@@ -30,7 +30,7 @@ Authorized [SeungilLee](https://github.com/ChoiIseungil)
 
 # Summary
 
-It is project in KAIST CS492(I) course. With NSML of NAVER, implement Korean SQuAD v2.0 model.
+It is project in KAIST CS492(I) course. With NSML of NAVER, implement korquad model.
 
 SQuAD is one of the important NLP processes that predict answers from question and passage pairs, and SQuAD v2.0 covers answerable questions and unanswerable ones.
 
